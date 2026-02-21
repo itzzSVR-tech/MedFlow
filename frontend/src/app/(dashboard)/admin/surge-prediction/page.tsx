@@ -1,19 +1,20 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
-    surgeRiskLevel, surgeRiskLabel, surgeForecastMessage,
-    opdTrendData,
-} from "@/constants/mock-data"
-import {
-    LineChart, Line, BarChart, Bar,
+    LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
-import { ShieldCheck, TrendingUp, AlertCircle, Users, Clock } from "lucide-react"
+import { ShieldCheck, TrendingUp, AlertCircle, Users, Clock, Loader2 } from "lucide-react"
+import api from "@/lib/api"
+import { toast } from "sonner"
 
 function SurgeGauge({ risk }: { risk: number }) {
     const color = risk >= 70 ? "#ef4444" : risk >= 40 ? "#f59e0b" : "#22c55e"
+    const label = risk >= 70 ? "CRITICAL" : risk >= 40 ? "MODERATE" : "STABLE"
     const labelBg = risk >= 70 ? "bg-red-50 text-red-700 border-red-200" : risk >= 40 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"
+
     return (
         <div className="flex flex-col items-center gap-3 py-4">
             <svg width="160" height="90" viewBox="0 0 160 90">
@@ -24,9 +25,11 @@ function SurgeGauge({ risk }: { risk: number }) {
                 <text x="80" y="86" textAnchor="middle" fontSize="11" fill="#9ca3af">/ 100</text>
             </svg>
             <span className={`text-xs font-bold px-4 py-1 rounded-full border ${labelBg}`}>
-                {surgeRiskLabel} Risk
+                {label} Risk
             </span>
-            <p className="text-xs text-gray-500 text-center max-w-xs leading-relaxed">{surgeForecastMessage}</p>
+            <p className="text-xs text-gray-500 text-center max-w-xs leading-relaxed">
+                {risk >= 70 ? "Incoming surge expected within 2 hours. High triage load detected." : "Normal operational flow. Bed occupancy within safety margins."}
+            </p>
         </div>
     )
 }
@@ -39,6 +42,31 @@ const aiRecommendations = [
 ]
 
 export default function SurgePredictionPage() {
+    const [analytics, setAnalytics] = useState<any>(null)
+    const [isLoading, setIsLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchAnalytics = async () => {
+            try {
+                const { data } = await api.get("/admin/analytics")
+                setAnalytics(data.data ?? data)
+            } catch (err) {
+                toast.error("Failed to load surge trends")
+            } finally {
+                setIsLoading(false)
+            }
+        }
+        fetchAnalytics()
+    }, [])
+
+    if (isLoading) {
+        return (
+            <div className="flex h-[60vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
             <div>
@@ -47,15 +75,14 @@ export default function SurgePredictionPage() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-3">
-                {/* Gauge */}
-                <Card className="rounded-2xl border border-gray-100 shadow-sm">
+                <Card className="rounded-[2rem] border-none shadow-sm bg-white">
                     <CardHeader className="pb-0">
-                        <CardTitle className="text-sm font-semibold text-gray-900">Current Surge Risk</CardTitle>
-                        <CardDescription className="text-xs">Live AI risk score</CardDescription>
+                        <CardTitle className="text-sm font-bold text-gray-900">Current Surge Risk</CardTitle>
+                        <CardDescription className="text-xs font-medium">Live AI risk score</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <SurgeGauge risk={surgeRiskLevel} />
-                        <div className="flex justify-between text-xs text-gray-400 px-2">
+                        <SurgeGauge risk={analytics?.surgeRisk || 0} />
+                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider px-2">
                             <span className="text-green-600">Low (0–39)</span>
                             <span className="text-amber-600">Moderate (40–69)</span>
                             <span className="text-red-600">High (70+)</span>
@@ -63,51 +90,45 @@ export default function SurgePredictionPage() {
                     </CardContent>
                 </Card>
 
-                {/* 14-day OPD Trend */}
-                <Card className="rounded-2xl border border-gray-100 shadow-sm lg:col-span-2">
+                <Card className="rounded-[2rem] border-none shadow-sm lg:col-span-2 bg-white">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold text-gray-900">14-Day OPD Trend</CardTitle>
-                        <CardDescription className="text-xs">Outpatient visits vs fever cases</CardDescription>
+                        <CardTitle className="text-sm font-bold text-gray-900 font-display">14-Day Admission Trend</CardTitle>
+                        <CardDescription className="text-xs font-medium">Outpatient visits vs critical conversions</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={220}>
-                            <LineChart data={opdTrendData}>
-                                <defs>
-                                    <linearGradient id="opdGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9ca3af" }} interval={1} />
-                                <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} />
-                                <Tooltip contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", fontSize: "12px" }} />
-                                <Legend wrapperStyle={{ fontSize: "11px" }} />
-                                <Line type="monotone" dataKey="opd" name="OPD" stroke="#3b82f6" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                                <Line type="monotone" dataKey="fever" name="Fever" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                        <div className="h-[220px] w-full mt-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={analytics?.dailyTrend || []}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#94a3b8" }} interval={1} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#94a3b8" }} />
+                                    <Tooltip contentStyle={{ borderRadius: "1rem", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }} />
+                                    <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
+                                    <Line type="monotone" dataKey="opd" name="OPD Inflow" stroke="#3b82f6" strokeWidth={3} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                                    <Line type="monotone" dataKey="fever" name="Fever Cases" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* AI Recommendations */}
-            <Card className="rounded-2xl border border-gray-100 shadow-sm">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-blue-500" /> AI Recommendations
+            <Card className="rounded-[2rem] border-none shadow-sm bg-white">
+                <CardHeader className="pb-3 px-8 pt-8">
+                    <CardTitle className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-blue-500" /> AI Recommendations
                     </CardTitle>
-                    <CardDescription className="text-xs">Actionable steps to mitigate surge risk</CardDescription>
+                    <CardDescription className="text-xs font-medium">Actionable steps to mitigate surge risk</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <CardContent className="px-8 pb-8">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {aiRecommendations.map(rec => (
-                            <div key={rec.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                                <div className={`h-9 w-9 rounded-lg flex items-center justify-center mb-3 ${rec.color}`}>
-                                    <rec.icon className="h-4 w-4" />
+                            <div key={rec.title} className="rounded-2xl border border-slate-50 bg-slate-50/50 p-6 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 group">
+                                <div className={`h-11 w-11 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 ${rec.color}`}>
+                                    <rec.icon className="h-5 w-5" />
                                 </div>
-                                <p className="font-semibold text-gray-900 text-sm">{rec.title}</p>
-                                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{rec.body}</p>
+                                <p className="font-bold text-slate-900 text-sm">{rec.title}</p>
+                                <p className="text-xs text-slate-500 mt-2 leading-relaxed font-medium">{rec.body}</p>
                             </div>
                         ))}
                     </div>

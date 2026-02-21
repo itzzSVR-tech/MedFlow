@@ -13,12 +13,12 @@ import {
     TrendingUp,
     ArrowRight,
 } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function Home() {
-    const { user, isLoaded } = useUser();
+    const { user, loading } = useAuth();
     const router = useRouter();
     const [isNavigating, setIsNavigating] = useState(false);
 
@@ -42,7 +42,7 @@ export default function Home() {
                             MedFlow
                         </span>
                     </div>
-                    {isLoaded &&
+                    {!loading &&
                         (user ? (
                             <button
                                 onClick={() => handleNavigation("/admin")}

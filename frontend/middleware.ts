@@ -1,18 +1,10 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse, NextRequest } from 'next/server'
 
-// Define public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
-  '/',
-  '/login(.*)',
-  '/signup(.*)',
-  '/api/webhooks(.*)',
-])
-
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect()
-  }
-})
+// This middleware is currently a pass-through because authentication protection 
+// is handled at the component level via ProtectedRoute.tsx
+export function middleware(request: NextRequest) {
+  return NextResponse.next()
+}
 
 export const config = {
   matcher: [

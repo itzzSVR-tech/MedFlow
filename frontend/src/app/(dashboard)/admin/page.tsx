@@ -2,76 +2,48 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
-    medflowKpis,
-    hourlyPatientData,
-    bedOccupancyHeatmap,
-    staffLoadData,
-    surgeRiskLevel,
-    surgeRiskLabel,
-    surgeForecastMessage,
-} from "@/constants/mock-data"
-import {
     AreaChart, Area,
     LineChart, Line,
     BarChart, Bar,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
-import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, Minus, Loader2, Hospital, Clock, Users } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { useAuth } from "@/contexts/auth-context"
+import { useRealtime } from "@/hooks/use-realtime"
+import api from "@/lib/api"
+import { toast } from "sonner"
 
-// Remap blue accent per card (some stay red/amber for medical urgency)
 const kpiAccent: Record<string, string> = {
-    opd: "#3b82f6",  // blue-500
-    emergency: "#ef4444",  // red-500
-    bed_occ: "#f59e0b",  // amber
-    icu: "#ef4444",  // red
-    wait: "#3b82f6",  // blue
-    doctors: "#3b82f6",  // blue
+    appointments: "#3b82f6",
+    doctors: "#10b981",
+    occupancy: "#f59e0b",
 }
 
-function KpiCard({ kpi }: { kpi: typeof medflowKpis[0] }) {
-    const color = kpiAccent[kpi.id] ?? "#3b82f6"
-    const sparkData = kpi.sparkline.map((v, i) => ({ i, v }))
-
-    const trendColor =
-        kpi.trend === "up"
-            ? kpi.id === "icu" || kpi.id === "emergency" ? "text-red-500" : "text-blue-500"
-            : kpi.trend === "down" ? "text-green-600"
-                : "text-gray-400"
+function KpiCard({ title, value, unit, trend, trendValue, icon: Icon, id }: any) {
+    const color = kpiAccent[id] ?? "#3b82f6"
 
     return (
-        <Card className="rounded-2xl border border-gray-100 shadow-sm bg-white hover:shadow-md transition-shadow duration-150">
+        <Card className="rounded-2xl border border-gray-100 shadow-sm bg-white hover:shadow-md transition-all">
             <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {kpi.title}
+                <CardTitle className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                    {title}
                 </CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-4">
-                <div className="flex items-end justify-between gap-2">
+                <div className="flex items-center justify-between">
                     <div>
                         <div className="text-3xl font-bold text-gray-900 leading-none">
-                            {kpi.value}
-                            {kpi.unit && <span className="text-lg font-semibold text-gray-400 ml-0.5">{kpi.unit}</span>}
+                            {value}
+                            {unit && <span className="text-lg font-semibold text-gray-400 ml-0.5">{unit}</span>}
                         </div>
-                        <div className={`flex items-center gap-1 mt-1.5 text-xs font-medium ${trendColor}`}>
-                            {kpi.trend === "up" && <ArrowUpRight className="h-3.5 w-3.5" />}
-                            {kpi.trend === "down" && <ArrowDownRight className="h-3.5 w-3.5" />}
-                            {kpi.trend === "neutral" && <Minus className="h-3.5 w-3.5" />}
-                            {kpi.trendValue} vs yesterday
+                        <div className="flex items-center gap-1 mt-2 text-[10px] font-bold uppercase tracking-wider text-blue-500">
+                            <ArrowUpRight className="h-3 w-3" />
+                            Live Syncing
                         </div>
                     </div>
-                    <div className="h-12 w-24">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={sparkData}>
-                                <defs>
-                                    <linearGradient id={`sg-${kpi.id}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor={color} stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor={color} stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2}
-                                    fill={`url(#sg-${kpi.id})`} dot={false} isAnimationActive={false} animationDuration={0} />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                    <div className={cn("p-3 rounded-2xl bg-opacity-10", id === 'appointments' ? 'bg-blue-500' : id === 'doctors' ? 'bg-green-500' : 'bg-amber-500')}>
+                        <Icon className={cn("w-6 h-6", id === 'appointments' ? 'text-blue-500' : id === 'doctors' ? 'text-green-500' : 'text-amber-500')} />
                     </div>
                 </div>
             </CardContent>
@@ -79,154 +51,133 @@ function KpiCard({ kpi }: { kpi: typeof medflowKpis[0] }) {
     )
 }
 
-function HeatmapRow({ ward }: { ward: typeof bedOccupancyHeatmap[0] }) {
-    const occPct = Math.round((ward.occupied / ward.total) * 100)
-    const getColor = (pct: number) =>
-        pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-blue-400"
-
-    return (
-        <div className="flex items-center gap-3">
-            <span className="w-28 text-xs text-gray-600 font-medium truncate">{ward.ward}</span>
-            <div className="flex-1 flex gap-0.5 h-5">
-                {Array.from({ length: ward.total }).map((_, idx) => {
-                    let color = "bg-gray-100"
-                    if (idx < ward.occupied) color = getColor(occPct)
-                    else if (idx < ward.occupied + ward.reserved) color = "bg-yellow-300"
-                    else if (idx < ward.occupied + ward.reserved + ward.maintenance) color = "bg-gray-300"
-                    return <div key={idx} className={`flex-1 rounded-sm ${color}`} />
-                })}
-            </div>
-            <span className={`text-xs font-semibold w-10 text-right ${occPct >= 90 ? "text-red-600" : occPct >= 70 ? "text-amber-600" : "text-blue-600"
-                }`}>{occPct}%</span>
-        </div>
-    )
-}
-
-function SurgeGauge({ risk }: { risk: number }) {
-    const color = risk >= 70 ? "#ef4444" : risk >= 40 ? "#f59e0b" : "#22c55e"
-    const labelColor = risk >= 70 ? "text-red-600" : risk >= 40 ? "text-amber-600" : "text-green-600"
-    const bgColor = risk >= 70 ? "bg-red-50 border-red-100" : risk >= 40 ? "bg-amber-50 border-amber-100" : "bg-green-50 border-green-100"
-
-    return (
-        <div className="flex flex-col items-center gap-2">
-            <svg width="130" height="74" viewBox="0 0 130 74">
-                <path d="M 10 65 A 55 55 0 0 1 120 65" fill="none" stroke="#f3f4f6" strokeWidth="10" strokeLinecap="round" />
-                <path d="M 10 65 A 55 55 0 0 1 120 65" fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
-                    strokeDasharray={`${(risk / 100) * 173} 173`} />
-                <text x="65" y="62" textAnchor="middle" fontSize="20" fontWeight="700" fill="#111827">{risk}</text>
-                <text x="65" y="76" textAnchor="middle" fontSize="9" fill="#9ca3af">/ 100</text>
-            </svg>
-            <span className={`text-xs font-bold px-3 py-0.5 rounded-full border ${bgColor} ${labelColor}`}>
-                {surgeRiskLabel} Risk
-            </span>
-        </div>
-    )
-}
+import { cn } from "@/lib/utils"
 
 export default function AdminDashboard() {
+    const { profile } = useAuth();
+    const [metrics, setMetrics] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+
+    const fetchMetrics = async () => {
+        try {
+            const { data } = await api.get("/admin/metrics")
+            setMetrics(data.data ?? data)
+        } catch (err) {
+            console.error("Failed to fetch metrics:", err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchMetrics()
+    }, [])
+
+    // Real-time listeners
+    const doctorEvent = useRealtime(profile?.hospital_id || "", "doctors");
+    const appointmentEvent = useRealtime(profile?.hospital_id || "", "appointments");
+    const metricEvent = useRealtime(profile?.hospital_id || "", "metrics");
+
+    useEffect(() => {
+        if (doctorEvent || appointmentEvent || metricEvent) {
+            fetchMetrics()
+        }
+    }, [doctorEvent, appointmentEvent, metricEvent]);
+
+    if (loading) {
+        return (
+            <div className="flex h-96 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-xl font-bold text-gray-900">Operations Overview</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Real-time hospital operations at a glance — Today, Feb 21</p>
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Operations Overview</h2>
+                    <p className="text-sm text-gray-500 mt-1">Real-time hospital intelligence system</p>
+                </div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100 font-bold text-xs uppercase tracking-widest">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                    </span>
+                    Live Dashboard
+                </div>
             </div>
 
-            {/* Row 1: 6 KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {medflowKpis.slice(0, 3).map((kpi: any) => (
-                    <KpiCard key={kpi.id} kpi={kpi} />
-                ))}
+            {/* Main KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <KpiCard
+                    id="appointments"
+                    title="Today's Appointments"
+                    value={metrics?.appointmentsToday || 0}
+                    icon={Clock}
+                />
+                <KpiCard
+                    id="doctors"
+                    title="Doctors On Duty"
+                    value={metrics?.activeDoctors || 0}
+                    icon={Users}
+                />
+                <KpiCard
+                    id="occupancy"
+                    title="Bed Occupancy"
+                    value={metrics?.bedOccupancy || 0}
+                    unit="%"
+                    icon={Hospital}
+                />
             </div>
 
-            {/* Row 2: Hourly + Heatmap */}
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="rounded-2xl border border-gray-100 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold text-gray-900">Hourly Patient Check-ins</CardTitle>
-                        <CardDescription className="text-xs text-gray-500">Today's patient visit timeline</CardDescription>
+            {/* Charts Row */}
+            <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="rounded-[2rem] border-none shadow-sm p-6 bg-white overflow-hidden">
+                    <CardHeader className="px-0 pt-0 pb-6">
+                        <CardTitle className="text-lg font-bold">Patient Inflow</CardTitle>
+                        <CardDescription className="text-xs font-bold uppercase tracking-widest text-slate-400">Activity last 24 hours</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={220}>
-                            <LineChart data={hourlyPatientData}>
-                                <defs>
-                                    <linearGradient id="hourGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                                <XAxis dataKey="hour" tick={{ fontSize: 10, fill: "#9ca3af" }} interval={2} />
-                                <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} />
-                                <Tooltip contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", fontSize: "12px" }} />
-                                <Line type="monotone" dataKey="checkins" stroke="#3b82f6" strokeWidth={2.5}
-                                    dot={false} activeDot={{ r: 5, fill: "#3b82f6" }} name="Check-ins" isAnimationActive={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-
-                <Card className="rounded-2xl border border-gray-100 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold text-gray-900">Bed Occupancy Heatmap</CardTitle>
-                        <CardDescription className="text-xs text-gray-500">Ward-by-ward occupancy levels</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3 mt-1">
-                            {bedOccupancyHeatmap.map((w) => <HeatmapRow key={w.ward} ward={w} />)}
+                    <CardContent className="px-0 pb-0">
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={metrics?.hourlyInflow || []}>
+                                    <defs>
+                                        <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                    <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                                    <Area type="monotone" dataKey="val" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
-                        <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-gray-500">
-                            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400 inline-block" /> &lt;70%</span>
-                            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400 inline-block" /> 70–89%</span>
-                            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-red-500 inline-block" /> ≥90%</span>
-                            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-yellow-300 inline-block" /> Reserved</span>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-[2rem] border-none shadow-sm p-6 bg-white flex flex-col">
+                    <CardHeader className="px-0 pt-0 pb-6">
+                        <CardTitle className="text-lg font-bold">Resource Allocation</CardTitle>
+                        <CardDescription className="text-xs font-bold uppercase tracking-widest text-slate-400">Current bed distribution</CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-0 pb-0 flex-1 flex flex-col justify-center">
+                        <div className="space-y-6">
+                            <ResourceBar label="General Ward" value={metrics?.bedDistribution?.General || 0} total={metrics?.bedDistribution?.TotalGeneral || 0} color="bg-blue-500" />
+                            <ResourceBar label="ICU / Emergency" value={metrics?.bedDistribution?.ICU || 0} total={metrics?.bedDistribution?.TotalICU || 0} color="bg-red-500" />
+                            <ResourceBar label="Surgical Unit / Isolation" value={metrics?.bedDistribution?.Isolation || 0} total={metrics?.bedDistribution?.TotalIsolation || 0} color="bg-amber-500" />
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Row 3: Staff Load + Surge */}
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="rounded-2xl border border-gray-100 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold text-gray-900">Staff Load Distribution</CardTitle>
-                        <CardDescription className="text-xs text-gray-500">Current patients per active doctor</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={staffLoadData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                                <XAxis type="number" tick={{ fontSize: 10, fill: "#9ca3af" }} />
-                                <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 10, fill: "#6b7280" }} />
-                                <Tooltip contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", fontSize: "12px" }} />
-                                <Bar dataKey="patients" name="Patients" radius={[0, 4, 4, 0]} fill="#3b82f6" isAnimationActive={false} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-
-                <Card className="rounded-2xl border border-gray-100 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-semibold text-gray-900">Surge Risk Monitor</CardTitle>
-                        <CardDescription className="text-xs text-gray-500">AI-driven risk assessment</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col items-center justify-center gap-3 py-2">
-                            <SurgeGauge risk={surgeRiskLevel} />
-                            <p className="text-xs text-gray-600 text-center max-w-xs leading-relaxed">{surgeForecastMessage}</p>
-                            <div className="w-full space-y-2 mt-2">
-                                {[
-                                    { label: "OPD Load", value: 87, color: "bg-red-400" },
-                                    { label: "ICU Fill Rate", value: 91, color: "bg-red-500" },
-                                    { label: "ER Arrival Rate", value: 64, color: "bg-amber-400" },
-                                ].map((item) => (
-                                    <div key={item.label} className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-500 w-28">{item.label}</span>
-                                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value}%` }} />
-                                        </div>
-                                        <span className="text-xs font-semibold text-gray-600 w-8 text-right">{item.value}%</span>
-                                    </div>
-                                ))}
+                        <div className="mt-10 grid grid-cols-2 gap-4">
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Available Beds</p>
+                                <p className="text-2xl font-bold text-slate-900">{(metrics?.totalBeds - metrics?.occupiedBeds) || 0}</p>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Live Status</p>
+                                <p className="text-2xl font-bold text-blue-600">Active</p>
                             </div>
                         </div>
                     </CardContent>
@@ -235,3 +186,19 @@ export default function AdminDashboard() {
         </div>
     )
 }
+
+function ResourceBar({ label, value, total, color }: any) {
+    const pct = Math.round((value / total) * 100)
+    return (
+        <div className="space-y-2">
+            <div className="flex justify-between items-end">
+                <span className="text-sm font-bold text-slate-700">{label}</span>
+                <span className="text-[10px] font-bold text-slate-400">{value} / {total} BEDS</span>
+            </div>
+            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className={cn("h-full rounded-full transition-all duration-1000", color)} style={{ width: `${pct}%` }} />
+            </div>
+        </div>
+    )
+}
+

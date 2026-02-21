@@ -2,215 +2,326 @@
 
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import api from "@/lib/api"
+import { toast } from "sonner"
+import {
+    Loader2, Save, CheckCircle, ArrowLeft, FileText,
+    Pill, Stethoscope, StickyNote, CalendarCheck, ClipboardList, ChevronRight
+} from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-    Stethoscope,
-    FileText,
-    Pill,
-    ArrowLeft,
-    CheckCircle2,
-    Save,
-    Calendar,
-    User
-} from "lucide-react"
-import { mockDoctorPatients } from "@/constants/doctor-mock-data"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { toast } from "sonner"
+import Link from "next/link"
 
-export default function ConsultationPage() {
-    const searchParams = useSearchParams()
-    const router = useRouter()
-    const patientId = searchParams.get("id")
+// ─── No-appointment landing state ────────────────────────────────────────────
+function SelectPatientState({ appointments, loading }: {
+    appointments: any[]
+    loading: boolean
+}) {
+    const scheduled = appointments.filter(a => a.status === "scheduled")
 
-    const [patient, setPatient] = useState<any>(null)
-    const [isLoading, setIsLoading] = useState(true)
-    const [isSubmitting, setIsSubmitting] = useState(false)
-
-    const [diagnosis, setDiagnosis] = useState("")
-    const [prescription, setPrescription] = useState("")
-    const [notes, setNotes] = useState("")
-    const [followUp, setFollowUp] = useState(false)
-
-    useEffect(() => {
-        if (patientId) {
-            const found = mockDoctorPatients.find(p => p.id === patientId)
-            setPatient(found || null)
-        }
-        setIsLoading(false)
-    }, [patientId])
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setIsSubmitting(true)
-
-        // Simulate async delay
-        await new Promise(resolve => setTimeout(resolve, 1500))
-
-        toast.success("Consultation completed", {
-            description: `Session for ${patient?.name} has been saved.`
-        })
-
-        setIsSubmitting(false)
-        router.push("/doctor/patients")
-    }
-
-    if (isLoading) return <div className="p-8 text-center animate-pulse">Loading patient data...</div>
-    if (!patientId) {
+    if (loading) {
         return (
-            <div className="h-[60vh] flex flex-col items-center justify-center p-8 bg-white rounded-3xl border-2 border-dashed border-gray-100">
-                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                    <User className="w-8 h-8 text-blue-500" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">No Patient Selected</h2>
-                <p className="text-gray-500 max-w-xs text-center mt-2">Please select a patient from the patient list to start a consultation.</p>
-                <Button
-                    variant="outline"
-                    className="mt-6 rounded-xl font-bold"
-                    onClick={() => router.push("/doctor/patients")}
-                >
-                    Go to Patient List
-                </Button>
+            <div className="flex h-96 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
         )
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 pb-12">
-            <div className="flex items-center gap-4">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-xl bg-white shadow-sm border border-gray-100 hover:bg-gray-50"
-                    onClick={() => router.back()}
-                >
-                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+        <div className="max-w-2xl mx-auto space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900">Consultations</h1>
+                <p className="text-gray-500">Select an active appointment to begin a consultation</p>
+            </div>
+
+            {scheduled.length === 0 ? (
+                <Card className="p-16 rounded-3xl border-none shadow-sm flex flex-col items-center text-center gap-4">
+                    <div className="w-20 h-20 rounded-[2rem] bg-blue-50 flex items-center justify-center">
+                        <ClipboardList className="w-9 h-9 text-blue-300" />
+                    </div>
+                    <h3 className="font-bold text-gray-900 text-lg">No active appointments</h3>
+                    <p className="text-sm text-gray-400">You have no scheduled appointments to consult right now.</p>
+                    <Link href="/doctor/patients">
+                        <Button variant="outline" className="rounded-2xl font-bold border-gray-200 mt-2">
+                            View All Patients
+                        </Button>
+                    </Link>
+                </Card>
+            ) : (
+                <Card className="rounded-3xl border-none shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-50 bg-gray-50/50">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{scheduled.length} Pending Appointment{scheduled.length > 1 ? "s" : ""}</p>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                        {scheduled.map(appt => (
+                            <Link key={appt.id} href={`/doctor/consultations?id=${appt.id}`}>
+                                <div className="px-6 py-4 hover:bg-blue-50/30 transition-colors flex items-center justify-between group cursor-pointer">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center font-bold text-blue-700 text-sm flex-shrink-0">
+                                            {(appt.patient_name || "P").charAt(0)}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-gray-900">{appt.patient_name || "Unknown Patient"}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">{appt.symptoms || "No symptoms recorded"} · {new Date(appt.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        {appt.triage && (
+                                            <Badge className={cn("text-[9px] font-bold px-2.5 py-1 border-none rounded-full uppercase",
+                                                appt.triage === "CRITICAL" ? "bg-red-50 text-red-700" :
+                                                    appt.triage === "HIGH" ? "bg-orange-50 text-orange-700" :
+                                                        appt.triage === "MEDIUM" ? "bg-yellow-50 text-yellow-700" :
+                                                            "bg-green-50 text-green-700"
+                                            )}>
+                                                {appt.triage}
+                                            </Badge>
+                                        )}
+                                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors" />
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </Card>
+            )}
+        </div>
+    )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+export default function ConsultationPage() {
+    const searchParams = useSearchParams()
+    const router = useRouter()
+    const appointmentId = searchParams.get("id")
+
+    const [allAppointments, setAllAppointments] = useState<any[]>([])
+    const [appointment, setAppointment] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+    const [savingDraft, setSavingDraft] = useState(false)
+    const [completed, setCompleted] = useState(false)
+
+    const [diagnosis, setDiagnosis] = useState("")
+    const [medications, setMedications] = useState("")
+    const [notes, setNotes] = useState("")
+    const [followUp, setFollowUp] = useState(false)
+
+    useEffect(() => {
+        const fetchAppointments = async () => {
+            try {
+                setLoading(true)
+                const { data } = await api.get("/doctor/appointments")
+                const appts = Array.isArray(data.appointments) ? data.appointments : []
+                setAllAppointments(appts)
+
+                if (appointmentId) {
+                    const found = appts.find((a: any) => a.id === appointmentId)
+                    if (found) {
+                        setAppointment(found)
+                    } else {
+                        toast.error("Appointment not found.")
+                    }
+                }
+            } catch (err: any) {
+                toast.error("Failed to load appointments.")
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchAppointments()
+    }, [appointmentId])
+
+    const handleSaveDraft = async () => {
+        if (!appointmentId) return
+        try {
+            setSavingDraft(true)
+            await api.post("/doctor/prescriptions", {
+                appointmentId,
+                diagnosis: diagnosis.trim() || null,
+                medications: medications.trim() || null,
+                notes: notes.trim() || null,
+                follow_up_required: followUp,
+                draft_status: "draft",
+            })
+            toast.success("Draft saved — appointment remains open.")
+        } catch (err: any) {
+            toast.error(`Failed to save draft: ${err?.response?.data?.error || err.message}`)
+        } finally {
+            setSavingDraft(false)
+        }
+    }
+
+    const handleSubmit = async () => {
+        if (!appointmentId) return
+        if (!diagnosis.trim() && !medications.trim()) {
+            toast.error("Please enter at least a diagnosis or medications before submitting.")
+            return
+        }
+        try {
+            setSaving(true)
+            await api.post("/doctor/prescriptions", {
+                appointmentId,
+                diagnosis: diagnosis.trim() || null,
+                medications: medications.trim() || null,
+                notes: notes.trim() || null,
+                follow_up_required: followUp,
+                draft_status: "final",
+            })
+            await api.patch(`/doctor/appointments/${appointmentId}/status`, { status: "completed" })
+            setCompleted(true)
+            toast.success("Consultation submitted successfully!")
+            setTimeout(() => router.push("/doctor/patients"), 1500)
+        } catch (err: any) {
+            toast.error(`Failed to submit: ${err?.response?.data?.error || err.message}`)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    // No appointment ID — show the list of pending appointments
+    if (!appointmentId) {
+        return <SelectPatientState appointments={allAppointments} loading={loading} />
+    }
+
+    if (loading) {
+        return (
+            <div className="flex h-96 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        )
+    }
+
+    // ID given but not found
+    if (!appointment) {
+        return (
+            <div className="flex h-96 flex-col items-center justify-center gap-4">
+                <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center">
+                    <FileText className="w-9 h-9 text-red-300" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Appointment Not Found</h2>
+                <p className="text-sm text-gray-400">This appointment may have been cancelled or completed.</p>
+                <Button variant="outline" onClick={() => router.push("/doctor/patients")} className="rounded-2xl font-bold border-gray-200">
+                    Back to Patients
                 </Button>
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Active Consultation</h1>
-                    <p className="text-gray-500 text-sm">Session started at 10:45 AM</p>
+            </div>
+        )
+    }
+
+    if (completed) {
+        return (
+            <div className="flex h-96 flex-col items-center justify-center gap-4">
+                <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-10 h-10 text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Consultation Complete</h2>
+                <p className="text-sm text-gray-500">Redirecting to patients list…</p>
+            </div>
+        )
+    }
+
+    const getTriageColor = (t?: string) => {
+        switch (t?.toUpperCase()) {
+            case "CRITICAL": return "bg-red-100 text-red-700 border-red-200"
+            case "HIGH": return "bg-orange-100 text-orange-700 border-orange-200"
+            case "MEDIUM": return "bg-yellow-100 text-yellow-700 border-yellow-200"
+            default: return "bg-green-100 text-green-700 border-green-200"
+        }
+    }
+
+    return (
+        <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => router.push("/doctor/consultations")} className="rounded-xl">
+                    <ArrowLeft className="w-5 h-5" />
+                </Button>
+                <div className="flex-1">
+                    <h1 className="text-2xl font-bold text-gray-900">Consultation</h1>
+                    <p className="text-sm text-gray-500">Document diagnosis, prescription, and notes</p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Patient Summary Card */}
-                <Card className="p-6 rounded-3xl border-none shadow-sm h-fit space-y-6">
-                    <div className="flex flex-col items-center text-center">
-                        <div className="w-20 h-20 rounded-3xl bg-blue-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-500/30 mb-4">
-                            {patient?.name.charAt(0)}
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900">{patient?.name}</h3>
-                        <p className="text-sm text-gray-500">{patient?.id} • {patient?.age} Years • Male</p>
-                        <Badge variant="outline" className="mt-3 rounded-full bg-red-50 text-red-600 border-red-100 font-bold px-4">
-                            {patient?.triage} PRIORITY
+            {/* Patient Info */}
+            <Card className="p-6 rounded-3xl border-none shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Patient</p>
+                        <h2 className="text-xl font-bold text-gray-900">{appointment.patient_name || "Unknown Patient"}</h2>
+                        <p className="text-sm text-gray-500 mt-1">{appointment.symptoms || "No symptoms recorded"}</p>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-2">
+                        <Badge className={cn("text-xs font-bold px-3 py-1 border", getTriageColor(appointment.triage))}>
+                            {appointment.triage || "LOW"} Triage
                         </Badge>
+                        <p className="text-xs text-gray-400">{new Date(appointment.scheduled_at).toLocaleString()}</p>
                     </div>
+                </div>
+            </Card>
 
-                    <div className="space-y-4 pt-4 border-t border-gray-50">
-                        <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Presented Symptoms</p>
-                            <p className="text-sm text-gray-700 leading-relaxed font-medium">{patient?.symptoms}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Assigned Ward</p>
-                            <p className="text-sm text-gray-700 font-medium">{patient?.ward}</p>
-                        </div>
+            {/* Form */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="p-6 rounded-3xl border-none shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="p-2 bg-blue-50 rounded-xl"><Stethoscope className="w-4 h-4 text-blue-600" /></div>
+                        <h3 className="font-bold text-gray-900">Diagnosis</h3>
                     </div>
+                    <textarea className="w-full h-36 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700 resize-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all"
+                        placeholder="Enter clinical diagnosis…" value={diagnosis} onChange={e => setDiagnosis(e.target.value)} />
                 </Card>
 
-                {/* Consultation Form */}
-                <Card className="lg:col-span-2 p-8 rounded-3xl border-none shadow-sm">
-                    <form onSubmit={handleSubmit} className="space-y-8">
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-3 mb-2">
-                                <Stethoscope className="w-5 h-5 text-blue-500" />
-                                <h3 className="font-bold text-gray-900">Clinical Assessment</h3>
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="text-sm font-bold text-gray-700">Diagnosis</label>
-                                <textarea
-                                    className="w-full rounded-2xl border border-gray-100 bg-gray-50/50 p-4 min-h-[120px] focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all text-sm placeholder:text-gray-400"
-                                    placeholder="Enter clinical diagnosis..."
-                                    value={diagnosis}
-                                    onChange={(e) => setDiagnosis(e.target.value)}
-                                    required
-                                />
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <Pill className="w-4 h-4 text-purple-500" />
-                                    <label className="text-sm font-bold text-gray-700">Prescription</label>
-                                </div>
-                                <textarea
-                                    className="w-full rounded-2xl border border-gray-100 bg-gray-50/50 p-4 min-h-[100px] focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all text-sm placeholder:text-gray-400"
-                                    placeholder="Add medication, dosage, and frequency..."
-                                    value={prescription}
-                                    onChange={(e) => setPrescription(e.target.value)}
-                                    required
-                                />
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-amber-500" />
-                                    <label className="text-sm font-bold text-gray-700">Internal Notes</label>
-                                </div>
-                                <textarea
-                                    className="w-full rounded-2xl border border-gray-100 bg-gray-50/50 p-4 min-h-[100px] focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all text-sm placeholder:text-gray-400 text-gray-600"
-                                    placeholder="Private observations or lab requests..."
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-between p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
-                                <div className="flex items-center gap-3 text-blue-800">
-                                    <Calendar className="w-4 h-4" />
-                                    <span className="text-sm font-bold">Schedule Follow-up</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setFollowUp(!followUp)}
-                                    className={cn(
-                                        "w-12 h-6 rounded-full p-1 transition-all duration-300",
-                                        followUp ? "bg-blue-600" : "bg-gray-200"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "w-4 h-4 bg-white rounded-full transition-all shadow-sm",
-                                        followUp ? "ml-6" : "ml-0"
-                                    )} />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 pt-4 border-t border-gray-100">
-                            <Button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold h-14 rounded-2xl shadow-lg shadow-blue-500/25 gap-3"
-                            >
-                                {isSubmitting ? (
-                                    <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                                ) : (
-                                    <CheckCircle2 className="w-5 h-5" />
-                                )}
-                                {isSubmitting ? "Saving..." : "Complete Consultation"}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                type="button"
-                                className="h-14 px-8 rounded-2xl border-gray-200 font-bold gap-2 text-gray-500 hover:text-gray-900"
-                            >
-                                <Save className="w-5 h-5" />
-                                Draft
-                            </Button>
-                        </div>
-                    </form>
+                <Card className="p-6 rounded-3xl border-none shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="p-2 bg-green-50 rounded-xl"><Pill className="w-4 h-4 text-green-600" /></div>
+                        <h3 className="font-bold text-gray-900">Medications</h3>
+                    </div>
+                    <textarea className="w-full h-36 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700 resize-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all"
+                        placeholder="e.g. Paracetamol 500mg × 3/day × 5 days" value={medications} onChange={e => setMedications(e.target.value)} />
                 </Card>
+
+                <Card className="p-6 rounded-3xl border-none shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="p-2 bg-amber-50 rounded-xl"><StickyNote className="w-4 h-4 text-amber-600" /></div>
+                        <h3 className="font-bold text-gray-900">Clinical Notes</h3>
+                    </div>
+                    <textarea className="w-full h-36 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700 resize-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all"
+                        placeholder="Additional observations or instructions…" value={notes} onChange={e => setNotes(e.target.value)} />
+                </Card>
+
+                <Card className="p-6 rounded-3xl border-none shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="p-2 bg-purple-50 rounded-xl"><CalendarCheck className="w-4 h-4 text-purple-600" /></div>
+                        <h3 className="font-bold text-gray-900">Follow-up Required?</h3>
+                    </div>
+                    <div className="flex items-center gap-4 mt-4">
+                        <button onClick={() => setFollowUp(true)}
+                            className={cn("flex-1 py-3 rounded-2xl border-2 font-bold text-sm transition-all",
+                                followUp ? "bg-purple-600 text-white border-purple-600" : "border-gray-200 text-gray-500 hover:border-purple-300")}>
+                            Yes, schedule follow-up
+                        </button>
+                        <button onClick={() => setFollowUp(false)}
+                            className={cn("flex-1 py-3 rounded-2xl border-2 font-bold text-sm transition-all",
+                                !followUp ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-500 hover:border-gray-400")}>
+                            No follow-up
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-4">
+                        {followUp ? "Patient will be notified to schedule a follow-up." : "No additional appointments required at this time."}
+                    </p>
+                </Card>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={handleSaveDraft} disabled={savingDraft || saving}
+                    className="rounded-2xl border-gray-200 font-bold px-6 gap-2">
+                    {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Draft
+                </Button>
+                <Button onClick={handleSubmit} disabled={saving || savingDraft}
+                    className="rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 gap-2 shadow-lg shadow-blue-100">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Submit & Complete
+                </Button>
             </div>
         </div>
     )

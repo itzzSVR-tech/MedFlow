@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
+import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { useRole, Role } from "@/contexts/role-context"
@@ -11,7 +11,9 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-    const { isLoaded, isSignedIn } = useUser()
+    const { user, loading } = useAuth()
+    const isSignedIn = !!user
+    const isLoaded = !loading
     const { role } = useRole()
     const router = useRouter()
 

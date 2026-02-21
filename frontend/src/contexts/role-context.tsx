@@ -1,74 +1,99 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState } from "react"
-import { useUser, useClerk } from "@clerk/nextjs"
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useAuth } from "./auth-context";
+import api from "@/lib/api";
+import { toast } from "sonner";
 
-export type Role = "ADMIN" | "DOCTOR" | null
-export type AvailabilityStatus = "AVAILABLE" | "BUSY" | "OFF DUTY"
+export type Role = "admin" | "doctor";
+export type AvailabilityStatus = "AVAILABLE" | "BUSY" | "OFF DUTY";
 
-interface RoleContextValue {
-    role: Role
-    setRole: (role: Role) => void
-    clearRole: () => void
-    availability: AvailabilityStatus
-    setAvailability: (status: AvailabilityStatus) => void
+// Backend uses lowercase values — map here
+const toBackendStatus = (s: AvailabilityStatus) => s.toLowerCase() as string;
+const fromBackendStatus = (s: string): AvailabilityStatus => s.toUpperCase() as AvailabilityStatus;
+
+interface RoleContextType {
+    role: Role;
+    setRole: (role: Role) => void;
+    availability: AvailabilityStatus;
+    setAvailability: (status: AvailabilityStatus) => Promise<void>;
 }
 
-const RoleContext = createContext<RoleContextValue>({
-    role: null,
-    setRole: () => { },
-    clearRole: () => { },
-    availability: "OFF DUTY",
-    setAvailability: () => { },
-})
+const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
-export function RoleProvider({ children }: { children: React.ReactNode }) {
-    const { user, isLoaded: userLoaded } = useUser()
-    const { signOut } = useClerk()
-    const [role, setRoleState] = useState<Role>(null)
-    const [availability, setAvailabilityState] = useState<AvailabilityStatus>("OFF DUTY")
+export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
+    const { profile, user } = useAuth();
+    const [role, setRole] = useState<Role>("admin");
+    const [availability, setAvailability] = useState<AvailabilityStatus>("AVAILABLE");
 
-    // Hydrate on mount
+    // Sync role with profile on load
     useEffect(() => {
-        const storedRole = localStorage.getItem("userRole") as Role
-        if (storedRole) setRoleState(storedRole)
-
-        const storedAvail = localStorage.getItem("doctorAvailability") as AvailabilityStatus
-        if (storedAvail) setAvailabilityState(storedAvail)
-    }, [])
-
-    // Sync with Clerk sign-out
-    useEffect(() => {
-        if (userLoaded && !user) {
-            setRoleState(null)
-            localStorage.removeItem("userRole")
+        if (profile?.role) {
+            setRole(profile.role as Role);
         }
-    }, [user, userLoaded])
+    }, [profile]);
 
-    const setRole = (r: Role) => {
-        setRoleState(r)
-        if (r) localStorage.setItem("userRole", r)
-        else localStorage.removeItem("userRole")
-    }
+    // Load from localStorage as fallback or for persistence before profile loads
+    useEffect(() => {
+        const savedRole = localStorage.getItem("medflow_role") as Role;
+        if (savedRole && !profile) {
+            setRole(savedRole);
+        }
+    }, [profile]);
 
-    const setAvailability = (status: AvailabilityStatus) => {
-        setAvailabilityState(status)
-        localStorage.setItem("doctorAvailability", status)
-    }
+    // Load initial availability from backend doctor profile
+    useEffect(() => {
+        const loadAvailability = async () => {
+            if (profile?.role !== "doctor" || !user) return;
+            try {
+                const { data } = await api.get("/doctor/profile");
+                const doctorProfile = data?.doctors?.[0] || data?.doctorProfile;
+                if (doctorProfile?.availability_status) {
+                    setAvailability(fromBackendStatus(doctorProfile.availability_status));
+                }
+            } catch {
+                // Non-fatal: falls back to default AVAILABLE
+            }
+        };
+        loadAvailability();
+    }, [profile, user]);
 
-    const clearRole = async () => {
-        setRoleState(null)
-        localStorage.removeItem("userRole")
-        await signOut()
-    }
+    const handleSetRole = (newRole: Role) => {
+        setRole(newRole);
+        localStorage.setItem("medflow_role", newRole);
+    };
+
+    const handleSetAvailability = useCallback(async (status: AvailabilityStatus) => {
+        const prev = availability;
+        setAvailability(status); // Optimistic update
+        if (role === "doctor" && user) {
+            try {
+                await api.patch("/doctor/availability", { status: toBackendStatus(status) });
+                toast.success(`Status updated to ${status.toLowerCase()}`);
+            } catch (err) {
+                setAvailability(prev); // Rollback on error
+                toast.error("Failed to update availability. Please try again.");
+                console.error("Failed to sync availability:", err);
+            }
+        }
+    }, [availability, role, user]);
 
     return (
-        <RoleContext.Provider value={{ role, setRole, clearRole, availability, setAvailability }}>
+        <RoleContext.Provider value={{
+            role,
+            setRole: handleSetRole,
+            availability,
+            setAvailability: handleSetAvailability
+        }}>
             {children}
         </RoleContext.Provider>
-    )
-}
+    );
+};
 
-export function useRole() {
-    return useContext(RoleContext)
-}
+export const useRole = () => {
+    const context = useContext(RoleContext);
+    if (context === undefined) {
+        throw new Error("useRole must be used within a RoleProvider");
+    }
+    return context;
+};

@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
     LayoutDashboard,
     BedDouble,
@@ -13,15 +13,14 @@ import {
     Settings,
     Menu,
     Activity,
-    UserCircle,
-    Stethoscope,
-    Calendar,
-    ClipboardList
+    LogOut
 } from "lucide-react"
 import { useState } from "react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { useRole } from "@/contexts/role-context"
+import { useAuth } from "@/contexts/auth-context"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const adminNavigation = [
     { name: "Overview", href: "/admin", icon: LayoutDashboard },
@@ -36,17 +35,28 @@ const adminNavigation = [
 const doctorNavigation = [
     { name: "Dashboard", href: "/doctor", icon: LayoutDashboard },
     { name: "My Patients", href: "/doctor/patients", icon: Users },
-    { name: "Consultations", href: "/doctor/consultations", icon: ClipboardList },
-    { name: "Availability", href: "/doctor/availability", icon: Calendar },
-    { name: "Profile", href: "/doctor/profile", icon: UserCircle },
+    { name: "Consultations", href: "/doctor/consultations", icon: FileBarChart2 },
+    { name: "Availability", href: "/doctor/availability", icon: TrendingUp },
+    { name: "Profile", href: "/doctor/profile", icon: Settings },
 ]
 
 export function Sidebar() {
     const pathname = usePathname()
+    const router = useRouter()
     const { role } = useRole()
+    const { user, profile, signOut } = useAuth()
     const [mobileOpen, setMobileOpen] = useState(false)
 
-    const navigation = role === "DOCTOR" ? doctorNavigation : adminNavigation
+    const navigation = role === "doctor" ? doctorNavigation : adminNavigation
+
+    const handleSignOut = async () => {
+        try {
+            await signOut()
+            router.push("/login")
+        } catch (error) {
+            console.error("Sign out failed:", error)
+        }
+    }
 
     const NavContent = () => (
         <nav className="flex flex-col gap-1 p-3">
@@ -80,24 +90,57 @@ export function Sidebar() {
             <div>
                 <span className="text-sm font-bold text-gray-900 leading-none">MedFlow</span>
                 <p className="text-[10px] text-gray-400 leading-none mt-0.5">
-                    {role === "DOCTOR" ? "Doctor Portal" : "Admin Portal"}
+                    {role === "doctor" ? "Doctor Portal" : "Admin Portal"}
                 </p>
             </div>
         </Link>
     )
 
+    const UserProfile = () => (
+        <div className="flex items-center gap-3 p-2 rounded-2xl border border-gray-100 bg-gray-50/50 group hover:border-blue-100 hover:bg-white transition-all">
+            <Avatar className="h-9 w-9 border-2 border-white shadow-sm shrink-0">
+                <AvatarImage src={user?.user_metadata?.avatar_url} />
+                <AvatarFallback className="bg-blue-100 text-blue-600 text-xs font-bold">
+                    {(profile?.full_name || user?.user_metadata?.full_name || "U").substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0 overflow-hidden text-left">
+                <p className="text-sm font-bold text-gray-900 truncate">
+                    {profile?.full_name || user?.user_metadata?.full_name || "User"}
+                </p>
+                <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
+            </div>
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl shrink-0"
+                title="Sign Out"
+            >
+                <LogOut className="h-4 w-4" />
+            </Button>
+        </div>
+    )
+
     return (
         <>
-            {/* Mobile Sidebar */}
+            {/* Mobile Sidebar Trigger */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-50">
                     <Button variant="outline" size="icon" className="rounded-xl shadow-sm bg-white border-gray-200">
                         <Menu className="h-5 w-5" />
                     </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0">
-                    <Logo />
-                    <NavContent />
+                <SheetContent side="left" className="w-64 p-0 bg-white">
+                    <div className="flex flex-col h-full">
+                        <Logo />
+                        <div className="flex-1 overflow-y-auto">
+                            <NavContent />
+                        </div>
+                        <div className="p-4 border-t border-gray-100">
+                            <UserProfile />
+                        </div>
+                    </div>
                 </SheetContent>
             </Sheet>
 
@@ -107,14 +150,17 @@ export function Sidebar() {
                 <div className="flex-1 overflow-y-auto py-2">
                     <NavContent />
                 </div>
-                <div className="border-t border-gray-100 p-4">
+
+                <div className="p-4 space-y-4">
                     <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
-                        <p className="text-xs font-semibold text-blue-600">System Status</p>
+                        <p className="text-xs font-semibold text-blue-600 font-outfit">System Status</p>
                         <div className="flex items-center gap-1.5 mt-1">
                             <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-xs text-gray-500">All services operational</span>
+                            <span className="text-xs text-gray-500 font-inter">All services operational</span>
                         </div>
                     </div>
+
+                    <UserProfile />
                 </div>
             </aside>
         </>

@@ -1,44 +1,78 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { mockStaff, type StaffMember } from "@/constants/mock-data"
-import { Users, Clock, AlertTriangle } from "lucide-react"
-
-const departments = ["All", ...Array.from(new Set(mockStaff.map(s => s.department)))]
+import { Users, Clock, AlertTriangle, Loader2 } from "lucide-react"
+import api from "@/lib/api"
+import { toast } from "sonner"
 
 export default function StaffMonitoringPage() {
+    const [doctors, setDoctors] = useState<any[]>([])
+    const [isLoading, setIsLoading] = useState(true)
     const [dept, setDept] = useState("All")
-    const filtered = dept === "All" ? mockStaff : mockStaff.filter(s => s.department === dept)
 
-    const onDuty = mockStaff.filter(s => s.status !== "Off Duty").length
-    const avgConsult = Math.round(mockStaff.reduce((a, s) => a + s.avgConsultTime, 0) / mockStaff.length)
-    const overloadPct = Math.round((mockStaff.filter(s => s.status === "Overloaded").length / mockStaff.length) * 100)
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const { data } = await api.get("/admin/doctors")
+                const raw = data?.data ?? data
+                setDoctors(Array.isArray(raw) ? raw : [])
+            } catch (err) {
+                toast.error("Failed to load staff performance metrics")
+            } finally {
+                setIsLoading(false)
+            }
+        }
+        fetchData()
+    }, [])
+
+    const departments = useMemo(() => ["All", ...Array.from(new Set((Array.isArray(doctors) ? doctors : []).map((s: any) => s.specialization)))], [doctors])
+
+    const stats = useMemo(() => {
+        const d = Array.isArray(doctors) ? doctors : []
+        const onDuty = d.filter((s: any) => s.availability_status === "available").length
+        const avgConsult = 12
+        const overloadPct = d.length > 0 ? Math.round((d.filter((s: any) => s.availability_status === "busy").length / d.length) * 100) : 0
+        return { onDuty, avgConsult, overloadPct }
+    }, [doctors])
+
+    const filtered = useMemo(() => {
+        const d = Array.isArray(doctors) ? doctors : []
+        return dept === "All" ? d : d.filter((s: any) => s.specialization === dept)
+    }, [dept, doctors])
+
+    if (isLoading) {
+        return (
+            <div className="flex h-[60vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6">
             <div>
                 <h2 className="text-xl font-bold text-gray-900">Staff Monitoring</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Doctor workload and duty status</p>
+                <p className="text-sm text-gray-500 mt-0.5">Doctor workload and duty status from live feed</p>
             </div>
 
             {/* KPIs */}
             <div className="grid gap-4 md:grid-cols-3">
                 {[
-                    { icon: Users, label: "Doctors on Duty", value: onDuty, unit: "", color: "bg-blue-50 text-blue-600" },
-                    { icon: Clock, label: "Avg Consult Time", value: avgConsult, unit: "min", color: "bg-blue-50 text-blue-600" },
-                    { icon: AlertTriangle, label: "Overload Risk", value: overloadPct, unit: "%", color: "bg-red-50 text-red-600" },
+                    { icon: Users, label: "Doctors Available", value: stats.onDuty, unit: "", color: "bg-blue-50 text-blue-600" },
+                    { icon: Clock, label: "Est. Consult Time", value: stats.avgConsult, unit: "min", color: "bg-blue-50 text-blue-600" },
+                    { icon: AlertTriangle, label: "Capacity Load", value: stats.overloadPct, unit: "%", color: stats.overloadPct > 80 ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600" },
                 ].map(kpi => (
-                    <Card key={kpi.label} className="rounded-2xl border border-gray-100 shadow-sm bg-white">
+                    <Card key={kpi.label} className="rounded-[2rem] border-none shadow-sm bg-white p-2">
                         <CardContent className="pt-5 pb-4 px-5 flex items-center gap-4">
-                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${kpi.color}`}>
-                                <kpi.icon className="h-5 w-5" />
+                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${kpi.color}`}>
+                                <kpi.icon className="h-6 w-6" />
                             </div>
                             <div>
-                                <p className="text-xs text-gray-400 font-medium">{kpi.label}</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {kpi.value}<span className="text-sm font-medium text-gray-400 ml-0.5">{kpi.unit}</span>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{kpi.label}</p>
+                                <p className="text-2xl font-bold text-slate-900 font-display">
+                                    {kpi.value}<span className="text-sm font-medium text-slate-400 ml-1">{kpi.unit}</span>
                                 </p>
                             </div>
                         </CardContent>
@@ -50,9 +84,9 @@ export default function StaffMonitoringPage() {
             <div className="flex flex-wrap gap-2">
                 {departments.map(d => (
                     <button key={d} onClick={() => setDept(d)}
-                        className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${dept === d
-                                ? "bg-blue-500 text-white border-blue-500"
-                                : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600"
+                        className={`px-5 py-2 rounded-2xl text-xs font-bold uppercase tracking-wider border-2 transition-all ${dept === d
+                            ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20"
+                            : "bg-white text-slate-500 border-slate-100 hover:border-blue-200 hover:text-blue-600"
                             }`}>
                         {d}
                     </button>
@@ -60,45 +94,51 @@ export default function StaffMonitoringPage() {
             </div>
 
             {/* Doctor Table */}
-            <Card className="rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-gray-900">
-                        Doctor Workload — {dept}
+            <Card className="rounded-[2.5rem] border-none shadow-sm overflow-hidden bg-white">
+                <CardHeader className="pb-6 p-8">
+                    <CardTitle className="text-lg font-bold text-slate-900">
+                        Workload Matrix — {dept}
                     </CardTitle>
-                    <CardDescription className="text-xs">
-                        {filtered.length} doctors shown
+                    <CardDescription className="text-xs font-medium text-slate-400">
+                        Real-time status tracking for {filtered.length} specialists
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50 text-left">
-                                {["Doctor", "Specialization", "Department", "Patients", "Avg Consult", "Status"].map(h => (
-                                    <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filtered.map(doc => (
-                                <tr key={doc.id}
-                                    className={`transition-colors ${doc.status === "Overloaded" ? "bg-red-50/50 hover:bg-red-50" : "hover:bg-gray-50"}`}>
-                                    <td className="px-4 py-3 font-semibold text-gray-900">{doc.name}</td>
-                                    <td className="px-4 py-3 text-gray-600">{doc.specialization}</td>
-                                    <td className="px-4 py-3 text-gray-500">{doc.department}</td>
-                                    <td className="px-4 py-3 font-semibold text-gray-900 tabular-nums">{doc.currentPatients}</td>
-                                    <td className="px-4 py-3 text-gray-600 tabular-nums">{doc.avgConsultTime} min</td>
-                                    <td className="px-4 py-3">
-                                        <Badge className={`text-xs border ${doc.status === "Normal" ? "bg-blue-50 text-blue-700 border-blue-100" :
-                                                doc.status === "Overloaded" ? "bg-red-50 text-red-700 border-red-100" :
-                                                    "bg-gray-100 text-gray-500 border-gray-200"
-                                            }`}>
-                                            {doc.status}
-                                        </Badge>
-                                    </td>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-slate-50/50 text-left">
+                                    {["Practitioner", "Specialization", "Contact", "Session Status"].map(h => (
+                                        <th key={h} className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
+                                    ))}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {filtered.map(doc => (
+                                    <tr key={doc.id} className="hover:bg-slate-50/30 transition-colors">
+                                        <td className="px-8 py-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                                                    {doc.users?.email?.charAt(0).toUpperCase() || "D"}
+                                                </div>
+                                                <span className="font-bold text-slate-900">{doc.users?.email?.split("@")[0]}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-5 text-slate-600 font-medium">{doc.specialization}</td>
+                                        <td className="px-8 py-5 text-slate-500 text-xs font-medium">{doc.users?.email}</td>
+                                        <td className="px-8 py-5">
+                                            <Badge className={`rounded-full px-4 py-1 text-[10px] font-bold uppercase border-none ${doc.availability_status === "available" ? "bg-green-50 text-green-600" :
+                                                doc.availability_status === "busy" ? "bg-amber-50 text-amber-600" :
+                                                    "bg-slate-100 text-slate-400"
+                                                }`}>
+                                                {doc.availability_status || "OFF DUTY"}
+                                            </Badge>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </CardContent>
             </Card>
         </div>

@@ -8,9 +8,9 @@ import {
     MoreHorizontal,
     ClipboardList,
     ExternalLink,
-    ChevronDown
+    Loader2,
+    RefreshCw
 } from "lucide-react"
-import { mockDoctorPatients, TriageLevel } from "@/constants/doctor-mock-data"
 import { Badge } from "@/components/ui/badge"
 import {
     DropdownMenu,
@@ -21,23 +21,48 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import api from "@/lib/api"
+import { toast } from "sonner"
+
+interface Appointment {
+    id: string;
+    patient_name?: string;
+    status: string;
+    scheduled_at: string;
+    triage?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+    symptoms?: string;
+}
 
 export default function MyPatients() {
     const [search, setSearch] = useState("")
     const [isLoading, setIsLoading] = useState(true)
+    const [appointments, setAppointments] = useState<Appointment[]>([])
+
+    const fetchPatients = async () => {
+        try {
+            setIsLoading(true)
+            const { data } = await api.get("/doctor/appointments")
+            // Backend returns { appointments, weeklyStats }
+            setAppointments(data.appointments || [])
+        } catch (err) {
+            console.error("Failed to fetch patients:", err)
+            toast.error("Failed to load patient list")
+        } finally {
+            setIsLoading(false)
+        }
+    }
 
     useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 600)
-        return () => clearTimeout(timer)
+        fetchPatients()
     }, [])
 
-    const filteredPatients = mockDoctorPatients.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
+    const filteredPatients = appointments.filter(p =>
+        (p.patient_name || "Patient").toLowerCase().includes(search.toLowerCase()) ||
         p.id.toLowerCase().includes(search.toLowerCase())
     )
 
-    const getTriageColor = (triage: TriageLevel) => {
-        switch (triage) {
+    const getTriageColor = (triage?: string) => {
+        switch (triage?.toUpperCase()) {
             case "LOW": return "bg-green-50 text-green-700 border-green-100"
             case "MEDIUM": return "bg-yellow-50 text-yellow-700 border-yellow-100"
             case "HIGH": return "bg-orange-50 text-orange-700 border-orange-100"
@@ -47,10 +72,10 @@ export default function MyPatients() {
     }
 
     const getStatusColor = (status: string) => {
-        switch (status) {
-            case "Waiting": return "bg-blue-50 text-blue-700"
-            case "In Consultation": return "bg-purple-50 text-purple-700"
-            case "Completed": return "bg-green-50 text-green-700"
+        switch (status.toLowerCase()) {
+            case "scheduled": return "bg-blue-50 text-blue-700"
+            case "completed": return "bg-green-50 text-green-700"
+            case "cancelled": return "bg-red-50 text-red-700"
             default: return "bg-gray-50 text-gray-700"
         }
     }
@@ -73,23 +98,22 @@ export default function MyPatients() {
                             className="pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none w-64 text-sm transition-all"
                         />
                     </div>
-                    <Button variant="outline" className="rounded-xl border-gray-200 gap-2 font-semibold">
-                        <Filter className="w-4 h-4" />
-                        Filter
+                    <Button variant="outline" size="icon" onClick={fetchPatients} className="rounded-xl border-gray-200 font-semibold h-10 w-10">
+                        <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
                     </Button>
                 </div>
             </div>
 
-            <Card className="rounded-3xl border-none shadow-sm overflow-hidden">
+            <Card className="rounded-3xl border-none shadow-sm overflow-hidden bg-white">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Patient</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Severity</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Symptoms</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Current Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Patient</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Severity</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Symptoms</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -104,48 +128,48 @@ export default function MyPatients() {
                                     </tr>
                                 ))
                             ) : filteredPatients.map((patient) => (
-                                <tr key={patient.id} className="hover:bg-gray-50 transition-colors group">
+                                <tr key={patient.id} className="hover:bg-blue-50/30 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center font-bold text-blue-700 text-sm">
-                                                {patient.name.charAt(0)}
+                                                {(patient.patient_name || "P").charAt(0)}
                                             </div>
                                             <div>
-                                                <p className="font-bold text-gray-900 leading-none">{patient.name}</p>
-                                                <p className="text-xs text-gray-500 mt-1">{patient.id} • {patient.age}y</p>
+                                                <p className="font-bold text-gray-900 leading-none">{patient.patient_name || "Patient"}</p>
+                                                <p className="text-[10px] text-gray-500 mt-1.5 font-bold uppercase tracking-wider">{new Date(patient.scheduled_at).toLocaleDateString()} • {new Date(patient.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Badge className={cn("text-[10px] px-2 py-0.5 border font-bold uppercase", getTriageColor(patient.triage))}>
-                                            {patient.triage}
+                                        <Badge className={cn("text-[9px] px-2.5 py-1 border-none rounded-full font-bold uppercase tracking-wider", getTriageColor(patient.triage))}>
+                                            {patient.triage || "LOW"}
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <p className="text-sm text-gray-600 line-clamp-1">{patient.symptoms}</p>
+                                        <p className="text-sm font-medium text-gray-600 line-clamp-1">{patient.symptoms || "Regular checkup"}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Badge variant="secondary" className={cn("text-[10px] rounded-full px-3 py-0.5", getStatusColor(patient.status))}>
+                                        <Badge variant="secondary" className={cn("text-[10px] rounded-full px-3 py-1 font-bold uppercase tracking-wider", getStatusColor(patient.status))}>
                                             {patient.status}
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <Link href={`/doctor/consultations?id=${patient.id}`}>
-                                                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2 font-bold shadow-sm shadow-blue-200">
+                                                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2 font-bold shadow-sm h-8">
                                                     Consult
                                                     <ExternalLink className="w-3.5 h-3.5" />
                                                 </Button>
                                             </Link>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-100">
+                                                    <Button variant="ghost" size="icon" className="rounded-lg h-8 w-8">
                                                         <MoreHorizontal className="w-4 h-4 text-gray-400" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="rounded-2xl border-gray-100 shadow-xl p-2">
-                                                    <DropdownMenuItem className="rounded-xl gap-2 cursor-pointer font-medium p-2.5">
-                                                        <ClipboardList className="w-4 h-4" />
+                                                <DropdownMenuContent align="end" className="rounded-2xl border-none shadow-xl p-2 bg-white ring-1 ring-slate-100">
+                                                    <DropdownMenuItem className="rounded-xl gap-2 cursor-pointer font-bold text-xs p-3 focus:bg-slate-50">
+                                                        <ClipboardList className="w-4 h-4 text-blue-500" />
                                                         View Records
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -158,12 +182,15 @@ export default function MyPatients() {
                     </table>
                 </div>
                 {!isLoading && filteredPatients.length === 0 && (
-                    <div className="p-12 text-center">
-                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Search className="w-8 h-8 text-gray-300" />
+                    <div className="p-20 text-center bg-slate-50/50">
+                        <div className="w-20 h-20 bg-white rounded-[2rem] shadow-sm flex items-center justify-center mx-auto mb-6">
+                            <Search className="w-8 h-8 text-gray-200" />
                         </div>
-                        <h3 className="font-bold text-gray-900">No patients found</h3>
-                        <p className="text-gray-500 text-sm mt-1">Try adjusting your search query</p>
+                        <h3 className="font-bold text-gray-900 text-lg">No patients found</h3>
+                        <p className="text-gray-500 text-sm mt-1 mb-8">No active appointments matching your criteria.</p>
+                        <Button onClick={fetchPatients} variant="outline" className="rounded-xl font-bold border-gray-200">
+                            Clear Search & Refresh
+                        </Button>
                     </div>
                 )}
             </Card>

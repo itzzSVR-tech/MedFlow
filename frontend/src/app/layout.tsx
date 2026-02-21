@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from '@clerk/nextjs'
+import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/sonner"
 
 import { RoleProvider } from "@/contexts/role-context"
@@ -22,7 +22,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <ClerkProvider>
+        <AuthProvider>
             <html lang="en">
                 <body className={`${outfit.className} antialiased`}>
                     <RoleProvider>
@@ -31,6 +31,6 @@ export default function RootLayout({
                     </RoleProvider>
                 </body>
             </html>
-        </ClerkProvider>
+        </AuthProvider>
     );
 }
