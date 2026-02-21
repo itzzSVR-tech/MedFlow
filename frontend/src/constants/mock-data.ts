@@ -154,7 +154,7 @@ export const mockAppointments: Appointment[] = [
     { id: "apt_4", patientName: "Diana Prince", doctorName: "Dr. Sarah Wilson", date: "2024-03-18", time: "11:15 AM", status: "Cancelled", type: "Follow-up" },
 ];
 
-// ─── SmartCare Flow Data ────────────────────────────────────────────────────
+// ─── MedFlow Data ────────────────────────────────────────────────────
 
 export interface KpiCard {
     id: string;
@@ -167,7 +167,7 @@ export interface KpiCard {
     color: string;
 }
 
-export const smartcareKpis: KpiCard[] = [
+export const medflowKpis: KpiCard[] = [
     {
         id: "opd",
         title: "Total OPD Today",

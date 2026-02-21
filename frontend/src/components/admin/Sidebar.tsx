@@ -12,13 +12,18 @@ import {
     FileBarChart2,
     Settings,
     Menu,
-    Activity
+    Activity,
+    UserCircle,
+    Stethoscope,
+    Calendar,
+    ClipboardList
 } from "lucide-react"
 import { useState } from "react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
+import { useRole } from "@/contexts/role-context"
 
-const navigation = [
+const adminNavigation = [
     { name: "Overview", href: "/admin", icon: LayoutDashboard },
     { name: "Bed Management", href: "/admin/bed-management", icon: BedDouble },
     { name: "Staff Monitoring", href: "/admin/staff-monitoring", icon: Users },
@@ -28,14 +33,25 @@ const navigation = [
     { name: "Settings", href: "/admin/settings", icon: Settings },
 ]
 
+const doctorNavigation = [
+    { name: "Dashboard", href: "/doctor", icon: LayoutDashboard },
+    { name: "My Patients", href: "/doctor/patients", icon: Users },
+    { name: "Consultations", href: "/doctor/consultations", icon: ClipboardList },
+    { name: "Availability", href: "/doctor/availability", icon: Calendar },
+    { name: "Profile", href: "/doctor/profile", icon: UserCircle },
+]
+
 export function Sidebar() {
     const pathname = usePathname()
+    const { role } = useRole()
     const [mobileOpen, setMobileOpen] = useState(false)
+
+    const navigation = role === "DOCTOR" ? doctorNavigation : adminNavigation
 
     const NavContent = () => (
         <nav className="flex flex-col gap-1 p-3">
             {navigation.map((item) => {
-                const isActive = pathname === item.href
+                const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
                 return (
                     <Link
                         key={item.name}
@@ -57,15 +73,17 @@ export function Sidebar() {
     )
 
     const Logo = () => (
-        <div className="flex h-16 items-center gap-2.5 border-b border-gray-100 px-5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500">
+        <Link href="/" className="flex h-16 items-center gap-2.5 border-b border-gray-100 px-5 group hover:bg-gray-50 transition-colors">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500 shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
                 <Activity className="h-4 w-4 text-white" />
             </div>
             <div>
-                <span className="text-sm font-bold text-gray-900 leading-none">SmartCare Flow</span>
-                <p className="text-[10px] text-gray-400 leading-none mt-0.5">Ops Dashboard</p>
+                <span className="text-sm font-bold text-gray-900 leading-none">MedFlow</span>
+                <p className="text-[10px] text-gray-400 leading-none mt-0.5">
+                    {role === "DOCTOR" ? "Doctor Portal" : "Admin Portal"}
+                </p>
             </div>
-        </div>
+        </Link>
     )
 
     return (
@@ -73,7 +91,7 @@ export function Sidebar() {
             {/* Mobile Sidebar */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-50">
-                    <Button variant="outline" size="icon">
+                    <Button variant="outline" size="icon" className="rounded-xl shadow-sm bg-white border-gray-200">
                         <Menu className="h-5 w-5" />
                     </Button>
                 </SheetTrigger>

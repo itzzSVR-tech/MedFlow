@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
-    smartcareKpis,
+    medflowKpis,
     hourlyPatientData,
     bedOccupancyHeatmap,
     staffLoadData,
@@ -28,7 +28,7 @@ const kpiAccent: Record<string, string> = {
     doctors: "#3b82f6",  // blue
 }
 
-function KpiCard({ kpi }: { kpi: typeof smartcareKpis[0] }) {
+function KpiCard({ kpi }: { kpi: typeof medflowKpis[0] }) {
     const color = kpiAccent[kpi.id] ?? "#3b82f6"
     const sparkData = kpi.sparkline.map((v, i) => ({ i, v }))
 
@@ -132,8 +132,10 @@ export default function AdminDashboard() {
             </div>
 
             {/* Row 1: 6 KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                {smartcareKpis.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} />)}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {medflowKpis.slice(0, 3).map((kpi: any) => (
+                    <KpiCard key={kpi.id} kpi={kpi} />
+                ))}
             </div>
 
             {/* Row 2: Hourly + Heatmap */}

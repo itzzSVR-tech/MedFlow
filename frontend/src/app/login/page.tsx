@@ -1,18 +1,30 @@
 "use client"
 
 import Link from "next/link";
-import { Activity, Mail, Lock, ArrowRight } from "lucide-react";
-import { useSignIn } from "@clerk/nextjs";
-import { useState } from "react";
+import { Activity, Mail, Lock, ArrowRight, UserCircle, Stethoscope } from "lucide-react";
+import { useSignIn, useUser } from "@clerk/nextjs";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useRole, Role } from "@/contexts/role-context";
+
 
 export default function Login() {
     const { signIn, isLoaded, setActive } = useSignIn();
+    const { user, isLoaded: userLoaded, isSignedIn } = useUser();
+    const { role, setRole } = useRole();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [selectedRole, setSelectedRole] = useState<Role>("ADMIN");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+
+    // Redirect if already signed in
+    useEffect(() => {
+        if (userLoaded && isSignedIn) {
+            router.push(role === "DOCTOR" ? "/doctor" : "/admin");
+        }
+    }, [userLoaded, isSignedIn, role, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,7 +41,8 @@ export default function Login() {
 
             if (result.status === "complete") {
                 await setActive({ session: result.createdSessionId });
-                router.push("/admin");
+                setRole(selectedRole);
+                router.push(selectedRole === "ADMIN" ? "/admin" : "/doctor");
             }
         } catch (err: any) {
             console.error("Login error:", err);
@@ -44,10 +57,11 @@ export default function Login() {
         if (!isLoaded) return;
 
         try {
+            setRole(selectedRole);
             await signIn.authenticateWithRedirect({
                 strategy,
                 redirectUrl: "/sso-callback",
-                redirectUrlComplete: "/admin",
+                redirectUrlComplete: selectedRole === "ADMIN" ? "/admin" : "/doctor",
             });
         } catch (err: any) {
             setError(err.errors?.[0]?.message || "OAuth sign in failed");
@@ -83,6 +97,29 @@ export default function Login() {
                     )}
 
                     <form className="space-y-6" onSubmit={handleSubmit}>
+                        {/* Role Selector */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedRole("ADMIN")}
+                                className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${selectedRole === "ADMIN"
+                                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
+                                    : "border-gray-100 bg-white text-gray-500 hover:border-blue-200 hover:bg-gray-50"}`}
+                            >
+                                <UserCircle className={`w-6 h-6 mb-2 ${selectedRole === "ADMIN" ? "text-blue-500" : "text-gray-400"}`} />
+                                <span className="text-xs font-bold uppercase tracking-wider">Admin</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedRole("DOCTOR")}
+                                className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${selectedRole === "DOCTOR"
+                                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
+                                    : "border-gray-100 bg-white text-gray-500 hover:border-blue-200 hover:bg-gray-50"}`}
+                            >
+                                <Stethoscope className={`w-6 h-6 mb-2 ${selectedRole === "DOCTOR" ? "text-blue-500" : "text-gray-400"}`} />
+                                <span className="text-xs font-bold uppercase tracking-wider">Doctor</span>
+                            </button>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
                             <div className="relative">
