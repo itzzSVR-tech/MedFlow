@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import {
     Search,
@@ -9,7 +9,8 @@ import {
     ClipboardList,
     ExternalLink,
     Loader2,
-    RefreshCw
+    RefreshCw,
+    AlertCircle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -23,6 +24,11 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import api from "@/lib/api"
 import { toast } from "sonner"
+import { useAuth } from "@/contexts/auth-context"
+import { useAppStore } from "@/store/use-app-store"
+import { StatusGlow } from "@/components/ui/status-glow"
+import { AnimatedNumber } from "@/components/ui/animated-number"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Appointment {
     id: string;
@@ -34,27 +40,34 @@ interface Appointment {
 }
 
 export default function MyPatients() {
+    const { profile } = useAuth();
+    const { activeAppointments: appointments, setAppointments } = useAppStore();
     const [search, setSearch] = useState("")
-    const [isLoading, setIsLoading] = useState(true)
-    const [appointments, setAppointments] = useState<Appointment[]>([])
+    const [isLoading, setIsLoading] = useState(!appointments.length)
+    const [doctorLoad, setDoctorLoad] = useState<any>(null)
 
-    const fetchPatients = async () => {
+    const fetchData = useCallback(async () => {
         try {
-            setIsLoading(true)
-            const { data } = await api.get("/doctor/appointments")
-            // Backend returns { appointments, weeklyStats }
-            setAppointments(data.appointments || [])
+            if (!appointments.length) setIsLoading(true)
+            const [{ data: apptData }, { data: loadData }] = await Promise.all([
+                api.get("/doctor/appointments"),
+                api.get("/doctor/load")
+            ])
+            setAppointments(apptData.appointments || [])
+            setDoctorLoad(loadData.load || null)
         } catch (err) {
             console.error("Failed to fetch patients:", err)
-            toast.error("Failed to load patient list")
+            // toast.error("Failed to load patient list")
         } finally {
             setIsLoading(false)
         }
-    }
+    }, [appointments.length, setAppointments])
 
     useEffect(() => {
-        fetchPatients()
-    }, [])
+        fetchData()
+    }, [fetchData])
+
+    const isAtCapacity = doctorLoad ? doctorLoad.active_appointments >= doctorLoad.max_active_cases : false;
 
     const filteredPatients = appointments.filter(p =>
         (p.patient_name || "Patient").toLowerCase().includes(search.toLowerCase()) ||
@@ -66,7 +79,7 @@ export default function MyPatients() {
             case "LOW": return "bg-green-50 text-green-700 border-green-100"
             case "MEDIUM": return "bg-yellow-50 text-yellow-700 border-yellow-100"
             case "HIGH": return "bg-orange-50 text-orange-700 border-orange-100"
-            case "CRITICAL": return "bg-red-50 text-red-700 border-red-200"
+            case "CRITICAL": return "bg-red-50 text-red-700 border-red-200 animate-pulse"
             default: return "bg-gray-50 text-gray-700 border-gray-100"
         }
     }
@@ -74,6 +87,7 @@ export default function MyPatients() {
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
             case "scheduled": return "bg-blue-50 text-blue-700"
+            case "in_progress": return "bg-purple-50 text-purple-700"
             case "completed": return "bg-green-50 text-green-700"
             case "cancelled": return "bg-red-50 text-red-700"
             default: return "bg-gray-50 text-gray-700"
@@ -83,9 +97,22 @@ export default function MyPatients() {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">My Patients</h1>
-                    <p className="text-gray-500">Manage your active patient list and consultations</p>
+                <div className="flex items-center gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">Control Center</h1>
+                        <p className="text-gray-500">Active Patient Operations</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <StatusGlow status={isAtCapacity ? "full" : "available"}>
+                            <Badge className={cn("rounded-2xl border px-3 py-1 font-bold text-[10px] uppercase tracking-widest transition-all",
+                                isAtCapacity ? "bg-rose-50 text-rose-600 border-rose-100" : "bg-emerald-50 text-emerald-600 border-emerald-100")}>
+                                {isAtCapacity ? "Capacity Reach" : "Operational"}
+                            </Badge>
+                        </StatusGlow>
+                        <Badge variant="outline" className="rounded-2xl border-gray-100 font-bold text-[10px] text-gray-400">
+                            <AnimatedNumber value={doctorLoad?.active_appointments || 0} /> / <AnimatedNumber value={doctorLoad?.max_active_cases || 5} /> ACT
+                        </Badge>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="relative">
@@ -98,7 +125,7 @@ export default function MyPatients() {
                             className="pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none w-64 text-sm transition-all"
                         />
                     </div>
-                    <Button variant="outline" size="icon" onClick={fetchPatients} className="rounded-xl border-gray-200 font-semibold h-10 w-10">
+                    <Button variant="outline" size="icon" onClick={fetchData} className="rounded-xl border-gray-200 font-semibold h-10 w-10">
                         <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
                     </Button>
                 </div>
@@ -141,23 +168,34 @@ export default function MyPatients() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Badge className={cn("text-[9px] px-2.5 py-1 border-none rounded-full font-bold uppercase tracking-wider", getTriageColor(patient.triage))}>
-                                            {patient.triage || "LOW"}
-                                        </Badge>
+                                        <StatusGlow status={patient.triage?.toLowerCase() as any || "available"}>
+                                            <Badge className={cn("text-[9px] px-2.5 py-1 border-none rounded-full font-bold uppercase tracking-wider", getTriageColor(patient.triage))}>
+                                                {patient.triage || "LOW"}
+                                            </Badge>
+                                        </StatusGlow>
                                     </td>
                                     <td className="px-6 py-4">
                                         <p className="text-sm font-medium text-gray-600 line-clamp-1">{patient.symptoms || "Regular checkup"}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Badge variant="secondary" className={cn("text-[10px] rounded-full px-3 py-1 font-bold uppercase tracking-wider", getStatusColor(patient.status))}>
-                                            {patient.status}
-                                        </Badge>
+                                        <StatusGlow status={patient.status === 'in_progress' ? "in_progress" : "waiting"}>
+                                            <Badge variant="secondary" className={cn("text-[10px] rounded-full px-3 py-1 font-bold uppercase tracking-wider", getStatusColor(patient.status))}>
+                                                {patient.status}
+                                            </Badge>
+                                        </StatusGlow>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <Link href={`/doctor/consultations?id=${patient.id}`}>
-                                                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2 font-bold shadow-sm h-8">
-                                                    Consult
+                                                <Button
+                                                    size="sm"
+                                                    disabled={isAtCapacity && patient.status === 'scheduled'}
+                                                    className={cn(
+                                                        "rounded-xl gap-2 font-bold shadow-sm h-8",
+                                                        patient.status === 'in_progress' ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+                                                    )}
+                                                >
+                                                    {patient.status === 'in_progress' ? 'Resume' : 'Consult'}
                                                     <ExternalLink className="w-3.5 h-3.5" />
                                                 </Button>
                                             </Link>
@@ -188,7 +226,7 @@ export default function MyPatients() {
                         </div>
                         <h3 className="font-bold text-gray-900 text-lg">No patients found</h3>
                         <p className="text-gray-500 text-sm mt-1 mb-8">No active appointments matching your criteria.</p>
-                        <Button onClick={fetchPatients} variant="outline" className="rounded-xl font-bold border-gray-200">
+                        <Button onClick={fetchData} variant="outline" className="rounded-xl font-bold border-gray-200">
                             Clear Search & Refresh
                         </Button>
                     </div>

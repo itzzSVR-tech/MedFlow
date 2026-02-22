@@ -173,63 +173,112 @@ export class AdminService {
         return data;
     }
 
-    static async getDashboardMetrics(hospitalId: string) {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const dayAgo = new Date();
-        dayAgo.setHours(dayAgo.getHours() - 24);
+    static async updateDoctorCapacity(hospitalId: string, doctorId: string, maxCases: number) {
+        if (maxCases < 1) throw new Error('Maximum active cases must be at least 1');
 
-        // Run all 4 independent queries in parallel
+        const { data, error } = await supabase
+            .from('doctors')
+            .update({ max_active_cases: maxCases })
+            .eq('id', doctorId)
+            .eq('hospital_id', hospitalId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    static async createBeds(hospitalId: string, type: string, count: number) {
+        const VALID_TYPES = ['ICU', 'General', 'Emergency', 'Isolation'];
+        if (!VALID_TYPES.includes(type)) throw new Error(`Invalid bed type: ${type}`);
+
+        // Find current max bed number for this type
+        const { data: lastBed } = await supabase
+            .from('beds')
+            .select('bed_number')
+            .eq('hospital_id', hospitalId)
+            .ilike('bed_number', `${type}-%`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        let startingIdx = 1;
+        if (lastBed && lastBed[0]?.bed_number) {
+            const parts = lastBed[0].bed_number.split('-');
+            startingIdx = parseInt(parts[parts.length - 1], 10) + 1;
+        }
+
+        const newBeds = Array.from({ length: count }, (_, i) => ({
+            hospital_id: hospitalId,
+            type,
+            status: 'Available',
+            bed_number: `${type}-${startingIdx + i}`
+        }));
+
+        const { data, error } = await supabase.from('beds').insert(newBeds).select();
+        if (error) throw error;
+        return data;
+    }
+
+    static async removeBed(hospitalId: string, bedId: string) {
+        const { data: bed } = await supabase.from('beds').select('status').eq('id', bedId).single();
+        if (bed?.status === 'Occupied') throw new Error('Cannot remove an occupied bed. Release it first.');
+
+        const { error } = await supabase.from('beds').delete().eq('id', bedId).eq('hospital_id', hospitalId);
+        if (error) throw error;
+        return { success: true };
+    }
+
+    static async releaseBed(hospitalId: string, bedId: string) {
+        const { data, error } = await supabase
+            .from('beds')
+            .update({
+                status: 'Available',
+                appointment_id: null,
+                last_status_change: new Date().toISOString()
+            })
+            .eq('id', bedId)
+            .eq('hospital_id', hospitalId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    static async getHospitalSummary(hospitalId: string) {
         const [
-            { count: totalAppointments },
-            { count: activeDoctors },
+            { data: docs },
             { data: beds },
-            { data: inflowData },
+            { data: appts }
         ] = await Promise.all([
-            supabase.from('appointments').select('*', { count: 'exact', head: true })
-                .eq('hospital_id', hospitalId).gte('scheduled_at', startOfDay.toISOString()),
-            supabase.from('doctors').select('*', { count: 'exact', head: true })
-                .eq('hospital_id', hospitalId).eq('availability_status', 'available'),
-            supabase.from('beds').select('*').eq('hospital_id', hospitalId),
-            supabase.from('appointments').select('scheduled_at')
-                .eq('hospital_id', hospitalId).gte('scheduled_at', dayAgo.toISOString()),
+            supabase.from('doctors').select('id, availability_status, max_active_cases').eq('hospital_id', hospitalId),
+            supabase.from('beds').select('type, status').eq('hospital_id', hospitalId),
+            supabase.from('appointments').select('id, status, triage').eq('hospital_id', hospitalId).neq('status', 'cancelled')
         ]);
 
-        const totalBeds = beds?.length || 0;
-        const occupiedBeds = beds?.filter((b: any) => b.status === 'Occupied').length || 0;
-        const bedOccupancyPct = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
-
-        const bedDistribution = {
-            General: beds?.filter((b: any) => b.type === 'General' && b.status === 'Occupied').length || 0,
-            ICU: beds?.filter((b: any) => b.type === 'ICU' && b.status === 'Occupied').length || 0,
-            Isolation: beds?.filter((b: any) => b.type === 'Isolation' && b.status === 'Occupied').length || 0,
-            TotalGeneral: beds?.filter((b: any) => b.type === 'General').length || 0,
-            TotalICU: beds?.filter((b: any) => b.type === 'ICU').length || 0,
-            TotalIsolation: beds?.filter((b: any) => b.type === 'Isolation').length || 0,
-        };
-
-        const hourlyInflow = Array.from({ length: 6 }, (_, i) => {
-            const h = dayAgo.getHours() + (i * 4);
-            const hourStr = `${String(h % 24).padStart(2, '0')}:00`;
-            const windowStart = new Date(dayAgo);
-            windowStart.setHours(h);
-            const windowEnd = new Date(windowStart);
-            windowEnd.setHours(windowEnd.getHours() + 4);
-            const count = inflowData?.filter((a: any) => {
-                const date = new Date(a.scheduled_at);
-                return date >= windowStart && date < windowEnd;
-            }).length || 0;
-            return { hour: hourStr, val: count };
-        });
+        const doctors = docs || [];
+        const bedsArr = beds || [];
+        const apptsArr = appts || [];
 
         return {
-            appointmentsToday: totalAppointments || 0,
-            activeDoctors: activeDoctors || 0,
-            bedOccupancy: Math.round(bedOccupancyPct),
-            totalBeds,
-            occupiedBeds,
-            bedDistribution,
-            hourlyInflow
+            totalDoctors: doctors.length,
+            activeDoctors: doctors.filter(d => d.availability_status === 'available').length,
+            bedsByType: {
+                ICU: {
+                    total: bedsArr.filter(b => b.type === 'ICU').length,
+                    occupied: bedsArr.filter(b => b.type === 'ICU' && b.status === 'Occupied').length
+                },
+                General: {
+                    total: bedsArr.filter(b => b.type === 'General').length,
+                    occupied: bedsArr.filter(b => b.type === 'General' && b.status === 'Occupied').length
+                },
+                Emergency: {
+                    total: bedsArr.filter(b => b.type === 'Emergency').length,
+                    occupied: bedsArr.filter(b => b.type === 'Emergency' && b.status === 'Occupied').length
+                }
+            },
+            waitingAdmissions: apptsArr.filter(a => a.status === 'waiting_for_bed').length,
+            activeAppointments: apptsArr.filter(a => ['scheduled', 'in_progress'].includes(a.status)).length
         };
     }
 

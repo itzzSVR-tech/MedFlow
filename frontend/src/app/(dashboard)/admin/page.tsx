@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
     AreaChart, Area,
@@ -7,12 +8,13 @@ import {
     BarChart, Bar,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
-import { ArrowUpRight, ArrowDownRight, Minus, Loader2, Hospital, Clock, Users } from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { useRealtime } from "@/hooks/use-realtime"
+import { ArrowUpRight, ArrowDownRight, Minus, Loader2, Hospital, Clock, Users, AlertCircle } from "lucide-react"
 import api from "@/lib/api"
 import { toast } from "sonner"
+import { AnimatedNumber } from "@/components/ui/animated-number"
+import { StatusGlow } from "@/components/ui/status-glow"
+import { motion, AnimatePresence } from "framer-motion"
+import { useAppStore } from "@/store/use-app-store"
 
 const kpiAccent: Record<string, string> = {
     appointments: "#3b82f6",
@@ -34,7 +36,7 @@ function KpiCard({ title, value, unit, trend, trendValue, icon: Icon, id }: any)
                 <div className="flex items-center justify-between">
                     <div>
                         <div className="text-3xl font-bold text-gray-900 leading-none">
-                            {value}
+                            <AnimatedNumber value={value} />
                             {unit && <span className="text-lg font-semibold text-gray-400 ml-0.5">{unit}</span>}
                         </div>
                         <div className="flex items-center gap-1 mt-2 text-[10px] font-bold uppercase tracking-wider text-blue-500">
@@ -54,9 +56,8 @@ function KpiCard({ title, value, unit, trend, trendValue, icon: Icon, id }: any)
 import { cn } from "@/lib/utils"
 
 export default function AdminDashboard() {
-    const { profile } = useAuth();
-    const [metrics, setMetrics] = useState<any>(null)
-    const [loading, setLoading] = useState(true)
+    const { hospitalMetrics: metrics, setMetrics } = useAppStore();
+    const [loading, setLoading] = useState(!metrics)
 
     const fetchMetrics = async () => {
         try {
@@ -70,19 +71,9 @@ export default function AdminDashboard() {
     }
 
     useEffect(() => {
+        // Only fetch if we don't have metrics or for refresh
         fetchMetrics()
     }, [])
-
-    // Real-time listeners
-    const doctorEvent = useRealtime(profile?.hospital_id || "", "doctors");
-    const appointmentEvent = useRealtime(profile?.hospital_id || "", "appointments");
-    const metricEvent = useRealtime(profile?.hospital_id || "", "metrics");
-
-    useEffect(() => {
-        if (doctorEvent || appointmentEvent || metricEvent) {
-            fetchMetrics()
-        }
-    }, [doctorEvent, appointmentEvent, metricEvent]);
 
     if (loading) {
         return (
@@ -95,9 +86,17 @@ export default function AdminDashboard() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Operations Overview</h2>
-                    <p className="text-sm text-gray-500 mt-1">Real-time hospital intelligence system</p>
+                <div className="flex items-center gap-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Operations Overview</h2>
+                        <p className="text-sm text-gray-500 mt-1">Real-time hospital intelligence system</p>
+                    </div>
+                    {metrics?.bedOccupancy > 90 && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-bold text-xs uppercase tracking-widest animate-pulse shadow-sm">
+                            <AlertCircle className="h-4 w-4" />
+                            Surge Danger: ICU Full
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100 font-bold text-xs uppercase tracking-widest">
                     <span className="relative flex h-2 w-2">
@@ -129,10 +128,10 @@ export default function AdminDashboard() {
                     unit="%"
                     icon={Hospital}
                 />
-            </div>
+            </div >
 
             {/* Charts Row */}
-            <div className="grid gap-6 lg:grid-cols-2">
+            < div className="grid gap-6 lg:grid-cols-2" >
                 <Card className="rounded-[2rem] border-none shadow-sm p-6 bg-white overflow-hidden">
                     <CardHeader className="px-0 pt-0 pb-6">
                         <CardTitle className="text-lg font-bold">Patient Inflow</CardTitle>
@@ -167,7 +166,7 @@ export default function AdminDashboard() {
                     <CardContent className="px-0 pb-0 flex-1 flex flex-col justify-center">
                         <div className="space-y-6">
                             <ResourceBar label="General Ward" value={metrics?.bedDistribution?.General || 0} total={metrics?.bedDistribution?.TotalGeneral || 0} color="bg-blue-500" />
-                            <ResourceBar label="ICU / Emergency" value={metrics?.bedDistribution?.ICU || 0} total={metrics?.bedDistribution?.TotalICU || 0} color="bg-red-500" />
+                            <ResourceBar label="ICU / Emergency" value={metrics?.bedDistribution?.ICU || 0} total={metrics?.bedDistribution?.TotalICU || 0} color={metrics?.bedDistribution?.ICU / (metrics?.bedDistribution?.TotalICU || 1) > 0.9 ? "bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]" : "bg-red-500"} />
                             <ResourceBar label="Surgical Unit / Isolation" value={metrics?.bedDistribution?.Isolation || 0} total={metrics?.bedDistribution?.TotalIsolation || 0} color="bg-amber-500" />
                         </div>
                         <div className="mt-10 grid grid-cols-2 gap-4">
@@ -182,23 +181,35 @@ export default function AdminDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-            </div>
-        </div>
+            </div >
+        </div >
     )
 }
 
-function ResourceBar({ label, value, total, color }: any) {
-    const pct = Math.round((value / total) * 100)
+function ResourceBar({ label, value, total, color }: { label: string, value: number, total: number, color: string }) {
+    const pct = Math.round((value / (total || 1)) * 100);
+    const isStressed = pct >= 90;
+    const isWarning = pct >= 80 && pct < 90;
+
     return (
         <div className="space-y-2">
-            <div className="flex justify-between items-end">
-                <span className="text-sm font-bold text-slate-700">{label}</span>
-                <span className="text-[10px] font-bold text-slate-400">{value} / {total} BEDS</span>
+            <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
+                <span className="text-[10px] font-bold text-gray-900">{value}/{total}</span>
             </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-1000", color)} style={{ width: `${pct}%` }} />
-            </div>
+            <StatusGlow
+                status={isStressed ? "critical" : isWarning ? "warning" : "available"}
+                className="w-full"
+                showGlow={isStressed || isWarning}
+            >
+                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        className={cn("h-full transition-all duration-500", color, isStressed && "animate-pulse")}
+                    />
+                </div>
+            </StatusGlow>
         </div>
     )
 }
-

@@ -6,7 +6,7 @@ export interface AuthRequest extends Request {
     user?: {
         id: string;
         supabase_uid: string;
-        role: 'admin' | 'doctor';
+        role: 'admin' | 'doctor' | 'patient';
         hospital_id: string;
         email?: string;
     };

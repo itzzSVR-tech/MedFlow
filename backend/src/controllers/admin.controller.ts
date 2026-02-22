@@ -1,8 +1,91 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { AdminService } from '../services/admin.service';
+import { OperationsService } from '../services/operations.service';
 import { supabase } from '../config/supabase';
 import { RealtimeService } from '../realtime/realtime.service';
+
+// ─── Operational control ──────────────────────────────────────────────────────
+
+export const getOperationalLoad = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        // The dashboard reads from the live metrics table updated by the engine heartbeat
+        const { data, error } = await supabase
+            .from('hospital_metrics')
+            .select('*')
+            .eq('hospital_id', hospitalId)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        // If no metrics yet (new hospital), trigger first recalc
+        if (!data) {
+            await OperationsService.recalculateMetrics(hospitalId);
+            const fresh = await supabase.from('hospital_metrics').select('*').eq('hospital_id', hospitalId).single();
+            return res.status(200).json({ success: true, data: fresh.data, error: null });
+        }
+
+        return res.status(200).json({ success: true, data, error: null });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, data: null, error: error.message });
+    }
+};
+
+export const setBookingMode = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        const { mode } = req.body;
+        const VALID_MODES = ['NORMAL', 'RESTRICTED', 'SURGE'];
+
+        if (!VALID_MODES.includes(mode)) {
+            return res.status(400).json({ success: false, data: null, error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}` });
+        }
+
+        await OperationsService.setBookingMode(hospitalId, mode as any);
+        await OperationsService.recalculateMetrics(hospitalId);
+
+        return res.status(200).json({ success: true, data: { bookingMode: mode }, error: null });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, data: null, error: error.message });
+    }
+};
+
+export const reassignAppointment = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        const { appointmentId } = req.params;
+        const { doctor_id } = req.body;
+        if (!doctor_id) {
+            return res.status(400).json({ success: false, data: null, error: 'doctor_id is required' });
+        }
+        await OperationsService.reassignAppointment(hospitalId, appointmentId, doctor_id);
+        // Sync metrics after reassignment
+        await OperationsService.recalculateMetrics(hospitalId).catch(() => { });
+        return res.status(200).json({ success: true, data: { appointmentId, newDoctorId: doctor_id }, error: null });
+    } catch (error: any) {
+        const status = error.message.includes('not found') ? 404 : 400;
+        return res.status(status).json({ success: false, data: null, error: error.message });
+    }
+};
+
+export const allocateBed = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        const { bedId } = req.params;
+        const { appointment_id } = req.body;
+        if (!appointment_id) {
+            return res.status(400).json({ success: false, data: null, error: 'appointment_id is required' });
+        }
+        await OperationsService.allocateBed(hospitalId, bedId, appointment_id);
+        // Sync metrics after bed allocation
+        await OperationsService.recalculateMetrics(hospitalId).catch(() => { });
+        return res.status(200).json({ success: true, data: { bedId, appointmentId: appointment_id }, error: null });
+    } catch (error: any) {
+        const status = error.message.includes('occupied') ? 409 : 400;
+        return res.status(status).json({ success: false, data: null, error: error.message });
+    }
+};
 
 export const createDoctor = async (req: AuthRequest, res: Response) => {
     try {
@@ -81,6 +164,26 @@ export const updateDoctorStatus = async (req: AuthRequest, res: Response) => {
         const data = await AdminService.updateDoctorStatus(hospitalId, doctorId, status);
 
         await RealtimeService.notifyDoctorAvailability(hospitalId, doctorId, status);
+        await OperationsService.recalculateMetrics(hospitalId).catch(() => { });
+
+        return res.status(200).json({ success: true, data, error: null });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, data: null, error: error.message });
+    }
+};
+
+export const updateDoctorCapacity = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        const { doctorId } = req.params;
+        const { max_active_cases } = req.body;
+
+        if (typeof max_active_cases !== 'number') {
+            return res.status(400).json({ success: false, data: null, error: 'max_active_cases must be a number' });
+        }
+
+        const data = await AdminService.updateDoctorCapacity(hospitalId, doctorId, max_active_cases);
+        await OperationsService.recalculateMetrics(hospitalId).catch(() => { });
 
         return res.status(200).json({ success: true, data, error: null });
     } catch (error: any) {
@@ -91,7 +194,7 @@ export const updateDoctorStatus = async (req: AuthRequest, res: Response) => {
 export const getHospitalMetrics = async (req: AuthRequest, res: Response) => {
     try {
         const hospitalId = req.user!.hospital_id;
-        const data = await AdminService.getDashboardMetrics(hospitalId);
+        const data = await AdminService.getHospitalSummary(hospitalId);
 
         await RealtimeService.notifyAdminDashboard(hospitalId, data);
 
@@ -115,6 +218,33 @@ export const getBeds = async (req: AuthRequest, res: Response) => {
     try {
         const hospitalId = req.user!.hospital_id;
         const data = await AdminService.getAllBeds(hospitalId);
+        return res.status(200).json({ success: true, data, error: null });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, data: null, error: error.message });
+    }
+};
+
+export const createBeds = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        const { type, count } = req.body;
+        if (!type || !count) return res.status(400).json({ success: false, error: 'type and count required' });
+
+        const data = await AdminService.createBeds(hospitalId, type, count);
+        await OperationsService.recalculateMetrics(hospitalId).catch(() => { });
+
+        return res.status(201).json({ success: true, data, error: null });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, data: null, error: error.message });
+    }
+};
+
+export const releaseBed = async (req: AuthRequest, res: Response) => {
+    try {
+        const hospitalId = req.user!.hospital_id;
+        const { bedId } = req.params;
+        const data = await AdminService.releaseBed(hospitalId, bedId);
+        await OperationsService.recalculateMetrics(hospitalId).catch(() => { });
         return res.status(200).json({ success: true, data, error: null });
     } catch (error: any) {
         return res.status(500).json({ success: false, data: null, error: error.message });

@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { authMiddleware } from './middlewares/auth.middleware';
 import adminRoutes from './routes/admin.routes';
 import doctorRoutes from './routes/doctor.routes';
+import patientRoutes from './routes/patient.routes';
 import * as AuthController from './controllers/auth.controller';
 
 dotenv.config();
@@ -28,6 +29,7 @@ app.get('/api/auth/me', authMiddleware, AuthController.getMe);
 // Protected API Routes
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/doctor', authMiddleware, doctorRoutes);
+app.use('/api/patient', authMiddleware, patientRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

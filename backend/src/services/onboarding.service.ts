@@ -60,7 +60,7 @@ export class OnboardingService {
             throw userErr;
         }
 
-        // 5. If Doctor, create Doctor record
+        // 5. Role-specific profile setup
         if (role === 'doctor') {
             console.log('[ONBOARDING] Creating doctor profile for new user...');
             const { error: docErr } = await supabase
@@ -73,8 +73,22 @@ export class OnboardingService {
 
             if (docErr) {
                 console.error('[ONBOARDING ERROR] Failed to create doctor record:', docErr);
-                // We don't throw here to allow the user to at least log in, 
-                // but the doctor services might fail later (handled by getDoctorId recovery)
+                // Don't throw — user can still log in; doctor service handles recovery
+            }
+        }
+
+        if (role === 'patient') {
+            console.log('[ONBOARDING] Creating patient profile for new user...');
+            const { error: patErr } = await supabase
+                .from('patients')
+                .insert({
+                    user_id: newUser.id,
+                    hospital_id: hospital_id,
+                });
+
+            if (patErr) {
+                console.error('[ONBOARDING ERROR] Failed to create patient record:', patErr);
+                // PatientService has a self-healing getPatientId fallback so this is not fatal
             }
         }
 

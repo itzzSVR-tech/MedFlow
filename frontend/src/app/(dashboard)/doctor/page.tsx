@@ -11,42 +11,37 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
-import { useRealtime } from "@/hooks/use-realtime"
 import api from "@/lib/api"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { AnimatedNumber } from "@/components/ui/animated-number"
+import { useAppStore } from "@/store/use-app-store"
 
 export default function DoctorOverview() {
     const { profile } = useAuth();
     const router = useRouter();
-    const [isLoading, setIsLoading] = useState(true)
-    const [appointments, setAppointments] = useState<any[]>([])
+    const { activeAppointments: appointments, setAppointments } = useAppStore();
     const [weeklyStats, setWeeklyStats] = useState<any[]>([])
+    const [isLoading, setIsLoading] = useState(!appointments.length)
 
     const fetchDashboardData = useCallback(async () => {
         try {
-            setIsLoading(true)
+            // If we have appointments, we don't show the full-screen loader
+            if (!appointments.length) setIsLoading(true)
             const { data } = await api.get("/doctor/appointments")
             setAppointments(data.appointments || [])
             setWeeklyStats(data.weeklyStats || [])
         } catch (err) {
             console.error("Failed to fetch doctor dashboard:", err)
-            toast.error("Failed to load dashboard data")
+            // Silently fail if we already have data in store
         } finally {
             setIsLoading(false)
         }
-    }, [])
+    }, [appointments.length, setAppointments])
 
     useEffect(() => {
         if (profile) fetchDashboardData()
     }, [profile, fetchDashboardData])
-
-    const appointmentEvent = useRealtime(profile?.hospital_id || "", "appointments");
-    useEffect(() => {
-        if (appointmentEvent?.type === 'APPOINTMENT_UPDATED' || appointmentEvent?.type === 'APPOINTMENT_CREATED') {
-            fetchDashboardData()
-        }
-    }, [appointmentEvent, fetchDashboardData]);
 
     const today = new Date();
     const todayApps = appointments.filter(a => {
@@ -95,7 +90,9 @@ export default function DoctorOverview() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-bold text-gray-500 uppercase tracking-widest text-[10px]">{stat.name}</p>
-                                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</h3>
+                                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                                    <AnimatedNumber value={parseInt(stat.value)} />
+                                </h3>
                             </div>
                             <div className={cn("p-3 rounded-2xl", stat.bg)}>
                                 <stat.icon className={cn("w-6 h-6", stat.color)} />

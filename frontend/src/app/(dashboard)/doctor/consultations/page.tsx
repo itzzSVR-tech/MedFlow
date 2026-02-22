@@ -6,13 +6,17 @@ import api from "@/lib/api"
 import { toast } from "sonner"
 import {
     Loader2, Save, CheckCircle, ArrowLeft, FileText,
-    Pill, Stethoscope, StickyNote, CalendarCheck, ClipboardList, ChevronRight
+    Pill, Stethoscope, StickyNote, CalendarCheck, ClipboardList, ChevronRight,
+    AlertCircle
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
+import { useAppStore } from "@/store/use-app-store"
+import { AnimatedNumber } from "@/components/ui/animated-number"
 
 // ─── No-appointment landing state ────────────────────────────────────────────
 function SelectPatientState({ appointments, loading }: {
@@ -96,8 +100,10 @@ export default function ConsultationPage() {
     const router = useRouter()
     const appointmentId = searchParams.get("id")
 
-    const [allAppointments, setAllAppointments] = useState<any[]>([])
+    const { profile } = useAuth()
+    const { activeAppointments: allAppointments, setAppointments, updateAppointment } = useAppStore();
     const [appointment, setAppointment] = useState<any>(null)
+    const [doctorLoad, setDoctorLoad] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [savingDraft, setSavingDraft] = useState(false)
@@ -111,27 +117,47 @@ export default function ConsultationPage() {
     useEffect(() => {
         const fetchAppointments = async () => {
             try {
-                setLoading(true)
-                const { data } = await api.get("/doctor/appointments")
-                const appts = Array.isArray(data.appointments) ? data.appointments : []
-                setAllAppointments(appts)
+                const [{ data: apptData }, { data: loadData }] = await Promise.all([
+                    api.get("/doctor/appointments"),
+                    api.get("/doctor/load")
+                ])
+                const appts = Array.isArray(apptData.appointments) ? apptData.appointments : []
+                setAppointments(appts)
+                setDoctorLoad(loadData.load)
 
                 if (appointmentId) {
                     const found = appts.find((a: any) => a.id === appointmentId)
                     if (found) {
                         setAppointment(found)
+                        // OPTIMISTIC UI: Instantly mark as in_progress in local store
+                        if (found.status === 'scheduled') {
+                            updateAppointment(appointmentId, { status: 'in_progress' });
+                            setAppointment({ ...found, status: 'in_progress' });
+
+                            // Background sync
+                            api.patch(`/doctor/appointments/${appointmentId}/status`, { status: "in_progress" })
+                                .catch(err => {
+                                    console.error("Auto-start failed", err);
+                                    updateAppointment(appointmentId, { status: 'scheduled' }); // Rollback
+                                    setAppointment(found);
+                                    toast.error("Failed to start consultation server-side.");
+                                });
+                        }
                     } else {
                         toast.error("Appointment not found.")
                     }
                 }
             } catch (err: any) {
-                toast.error("Failed to load appointments.")
+                toast.error("Failed to load operational data.")
             } finally {
                 setLoading(false)
             }
         }
         fetchAppointments()
-    }, [appointmentId])
+    }, [appointmentId, setAppointments, updateAppointment])
+
+    // Simplified monitored logic
+    const isNearCapacity = doctorLoad ? (doctorLoad.active_appointments / doctorLoad.max_active_cases) >= 0.8 : false;
 
     const handleSaveDraft = async () => {
         if (!appointmentId) return
@@ -240,6 +266,12 @@ export default function ConsultationPage() {
                     <h1 className="text-2xl font-bold text-gray-900">Consultation</h1>
                     <p className="text-sm text-gray-500">Document diagnosis, prescription, and notes</p>
                 </div>
+                {isNearCapacity && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-bold text-xs uppercase tracking-widest animate-pulse shadow-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        Operational Surge: {doctorLoad?.active_appointments}/{doctorLoad?.max_active_cases} Active
+                    </div>
+                )}
             </div>
 
             {/* Patient Info */}
