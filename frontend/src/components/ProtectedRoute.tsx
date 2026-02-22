@@ -29,7 +29,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
         }
     }, [isLoaded, isSignedIn, role, allowedRoles, router])
 
-    if (!isLoaded || !isSignedIn || (role && !allowedRoles.includes(role))) {
+    if (!isLoaded || !isSignedIn || !role || !allowedRoles.includes(role)) {
         return (
             <div className="h-screen w-screen flex items-center justify-center bg-gray-50">
                 <div className="flex flex-col items-center gap-4">

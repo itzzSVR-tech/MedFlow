@@ -28,7 +28,9 @@ export default function LoginPage() {
 
     // Handle redirection once profile is loaded after login
     useEffect(() => {
+        console.log("[LOGIN] State check:", { hasUser: !!user, hasProfile: !!profile, role: profile?.role });
         if (user && profile) {
+            console.log("[LOGIN] Redirecting user based on role:", profile.role);
             if (profile.role === "admin") {
                 router.push("/admin");
             } else if (profile.role === "doctor") {
@@ -49,7 +51,7 @@ export default function LoginPage() {
         } catch (err: any) {
             setError(
                 err.message ||
-                    "Failed to log in. Please check your credentials.",
+                "Failed to log in. Please check your credentials.",
             );
             setLoading(false);
         }
@@ -57,18 +59,7 @@ export default function LoginPage() {
 
     const handleGoogleSignIn = async () => {
         try {
-            // Save intended role in localized storage to read after redirect
-            localStorage.setItem("medflow_intended_role", activeTab);
-
-            await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                    redirectTo: `${window.location.origin}/login`,
-                    queryParams: {
-                        prompt: "select_account",
-                    },
-                },
-            });
+            await signInWithGoogle(activeTab);
         } catch (err: any) {
             setError(err.message || "Google sign-in failed.");
         }
@@ -144,8 +135,8 @@ export default function LoginPage() {
                                 {activeTab === "admin"
                                     ? "Admin Email"
                                     : activeTab === "doctor"
-                                      ? "Staff Email"
-                                      : "Patient Email"}
+                                        ? "Staff Email"
+                                        : "Patient Email"}
                             </label>
                             <div className="relative group">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
@@ -158,8 +149,8 @@ export default function LoginPage() {
                                         activeTab === "admin"
                                             ? "admin@hospital.com"
                                             : activeTab === "doctor"
-                                              ? "doctor@hospital.com"
-                                              : "patient@email.com"
+                                                ? "doctor@hospital.com"
+                                                : "patient@email.com"
                                     }
                                     required
                                 />

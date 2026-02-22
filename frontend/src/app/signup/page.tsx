@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 
 export default function Signup() {
-    const { signInWithGoogle } = useAuth();
+    const { signInWithGoogle, signUp } = useAuth();
     const [activeTab, setActiveTab] = useState("admin");
     const [formData, setFormData] = useState({
         firstName: "",
@@ -50,21 +50,13 @@ export default function Signup() {
         setLoading(true);
         setError("");
         try {
-            const { data, error: signupError } = await supabase.auth.signUp({
-                email: formData.email,
-                password: formData.password,
-                options: {
-                    data: {
-                        full_name: `${formData.firstName} ${formData.lastName}`,
-                        hospital_name: formData.hospitalName,
-                        role: activeTab === "admin" ? "admin" : "patient",
-                    },
-                },
+            const data = await signUp(formData.email, formData.password, {
+                full_name: `${formData.firstName} ${formData.lastName}`,
+                role: activeTab === "admin" ? "admin" : activeTab === "staff" ? "doctor" : "patient",
+                hospital_name: activeTab === "admin" ? formData.hospitalName : undefined
             });
 
-            if (signupError) throw signupError;
-
-            if (data.user) {
+            if (data?.user) {
                 router.push(
                     "/login?message=Check your email to confirm your account",
                 );
@@ -99,15 +91,15 @@ export default function Signup() {
                             {activeTab === "admin"
                                 ? "Register Hospital"
                                 : activeTab === "staff"
-                                  ? "Medical Staff Portal"
-                                  : "Join as Patient"}
+                                    ? "Medical Staff Portal"
+                                    : "Join as Patient"}
                         </h3>
                         <p className="text-blue-100 leading-relaxed text-sm">
                             {activeTab === "admin"
                                 ? "Empower your facility with MedFlow's unified OS. Start your administrator journey now."
                                 : activeTab === "staff"
-                                  ? "Join your hospital network and collaborate with your medical team in real-time."
-                                  : "Take control of your health. Book appointments and track your care with ease."}
+                                    ? "Join your hospital network and collaborate with your medical team in real-time."
+                                    : "Take control of your health. Book appointments and track your care with ease."}
                         </p>
                     </div>
 
@@ -280,33 +272,100 @@ export default function Signup() {
                             </div>
                         </form>
                     ) : (
-                        <div className="space-y-6 py-10 text-center animate-in fade-in zoom-in-95">
-                            <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto text-blue-600 shadow-sm border border-blue-100">
-                                <Mail className="w-10 h-10" />
+                        <form className="space-y-4" onSubmit={handleSubmit}>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                        First Name
+                                    </label>
+                                    <div className="relative group">
+                                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            name="firstName"
+                                            value={formData.firstName}
+                                            onChange={handleChange}
+                                            className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl py-2.5 pl-10 pr-3 outline-none transition-all text-sm font-medium"
+                                            placeholder="Dr. John"
+                                            required
+                                            disabled={loading}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                        Last Name
+                                    </label>
+                                    <div className="relative group">
+                                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            name="lastName"
+                                            value={formData.lastName}
+                                            onChange={handleChange}
+                                            className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl py-2.5 pl-10 pr-3 outline-none transition-all text-sm font-medium"
+                                            placeholder="Smith"
+                                            required
+                                            disabled={loading}
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-900 mb-2">
-                                    Staff Invitation Required
-                                </h3>
-                                <p className="text-slate-500 text-sm leading-relaxed">
-                                    Medical staff cannot register independently.
-                                    Please contact your Hospital Administrator
-                                    to receive an official invite link.
-                                </p>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                    Staff Email
+                                </label>
+                                <div className="relative group">
+                                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                        className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl py-2.5 pl-10 pr-3 outline-none transition-all text-sm font-medium"
+                                        placeholder="doctor@hospital.com"
+                                        required
+                                        disabled={loading}
+                                    />
+                                </div>
                             </div>
-                            <Button
-                                onClick={() => setActiveTab("admin")}
-                                variant="outline"
-                                className="rounded-xl border-slate-200 text-slate-600 font-bold px-8"
-                            >
-                                Back to Admin
-                            </Button>
-                        </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                    Secure Password
+                                </label>
+                                <div className="relative group">
+                                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl py-2.5 pl-10 pr-3 outline-none transition-all text-sm font-medium"
+                                        placeholder="••••••••"
+                                        required
+                                        disabled={loading}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-4">
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? "Registering..." : "Join Medical Team"}
+                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </div>
+                        </form>
                     )}
 
                     <div className="mt-8">
                         <button
-                            onClick={signInWithGoogle}
+                            onClick={() => signInWithGoogle(activeTab === "staff" ? "doctor" : activeTab)}
                             className="w-full h-14 bg-white border-2 border-slate-100 hover:border-blue-100 hover:bg-blue-50 rounded-2xl transition-all font-bold text-slate-700 flex items-center justify-center gap-3 active:scale-[0.98]"
                         >
                             <Chrome className="w-5 h-5 text-blue-600" />

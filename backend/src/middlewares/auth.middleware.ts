@@ -60,7 +60,8 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
         }
 
         // Ensure internal user record exists (auto-onboarding)
-        const user = await OnboardingService.ensureUser(supabaseUser);
+        const roleOverride = req.headers['x-medflow-role'] as string;
+        const user = await OnboardingService.ensureUser(supabaseUser, roleOverride);
 
         // Populate cache
         TOKEN_CACHE.set(token, {

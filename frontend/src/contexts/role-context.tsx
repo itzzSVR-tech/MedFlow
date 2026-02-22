@@ -20,7 +20,7 @@ const fromBackendStatus = (s: string): AvailabilityStatus =>
     s.toUpperCase() as AvailabilityStatus;
 
 interface RoleContextType {
-    role: Role;
+    role: Role | null;
     setRole: (role: Role) => void;
     availability: AvailabilityStatus;
     setAvailability: (status: AvailabilityStatus) => Promise<void>;
@@ -30,7 +30,7 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     const { profile, user } = useAuth();
-    const [role, setRole] = useState<Role>("admin");
+    const [role, setRole] = useState<Role | null>(null);
     const [availability, setAvailability] =
         useState<AvailabilityStatus>("AVAILABLE");
 

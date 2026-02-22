@@ -1,0 +1,7 @@
+{
+    "name": "medflow-monorepo",
+    "private": true,
+    "scripts": {
+        "dev": "pnpm -r --parallel dev"
+    }
+}

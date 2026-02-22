@@ -1,8 +1,8 @@
 import { supabase } from '../config/supabase';
 
 export class OnboardingService {
-    static async ensureUser(supabaseUser: any) {
-        console.log('[ONBOARDING] Ensuring profile for:', supabaseUser.email);
+    static async ensureUser(supabaseUser: any, roleOverride?: string) {
+        console.log('[ONBOARDING] Ensuring profile for:', supabaseUser.email, roleOverride ? `(Role Override: ${roleOverride})` : '');
 
         // 1. Check if user already exists
         const { data: existingUser, error: fetchError } = await supabase
@@ -24,7 +24,7 @@ export class OnboardingService {
         console.log('[ONBOARDING] Creating new user profile...');
 
         let hospital_id = supabaseUser.user_metadata?.hospital_id;
-        const role = supabaseUser.user_metadata?.role || 'admin';
+        const role = roleOverride || supabaseUser.user_metadata?.role || 'admin';
 
         // 3. Ensure Hospital exists
         if (!hospital_id) {

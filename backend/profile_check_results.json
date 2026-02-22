@@ -1,0 +1,22 @@
+{
+  "doctors": [
+    {
+      "id": "46610360-217e-4fb4-bf24-b8d6305c2456",
+      "user_id": "f07d8fc4-7817-46fd-b180-14bd30811e31",
+      "hospital_id": "fe213cac-f33e-411a-aa78-2ecf14d5c88d",
+      "specialization": "General Practice",
+      "availability_status": "available",
+      "created_at": "2026-02-21T18:18:39.415491+00:00"
+    }
+  ],
+  "patients": [
+    {
+      "id": "5ec35ba8-23c2-44e9-acbc-f8f3a4c6466c",
+      "user_id": "a5e88e9b-2421-428e-9e9c-b4b59cf3a8c6",
+      "hospital_id": "1c38413d-015e-4ada-862c-0ae1864a40ad",
+      "date_of_birth": null,
+      "blood_type": null,
+      "created_at": "2026-02-22T03:48:29.630157+00:00"
+    }
+  ]
+}

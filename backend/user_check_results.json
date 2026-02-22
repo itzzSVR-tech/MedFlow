@@ -1,0 +1,37 @@
+[
+  {
+    "id": "2b34094a-a934-4760-b21b-6879ac6ec241",
+    "email": "karthiknair1610@gmail.com",
+    "role": "admin",
+    "full_name": null,
+    "supabase_uid": "ed3c3498-18ea-4810-b4ae-3b60613bc531"
+  },
+  {
+    "id": "f07d8fc4-7817-46fd-b180-14bd30811e31",
+    "email": "knair9429@gmail.com",
+    "role": "doctor",
+    "full_name": null,
+    "supabase_uid": "5c1d1be2-827a-4084-904c-4e910ac4c15c"
+  },
+  {
+    "id": "4816bf1f-54aa-450a-8658-691a480e595c",
+    "email": "itzzsvr.tech74@gmail.com",
+    "role": "admin",
+    "full_name": "itzzSVR-tech",
+    "supabase_uid": "36813cd8-ad07-42ac-96a9-c26b026cd057"
+  },
+  {
+    "id": "d96a7edc-5067-453b-acfe-3d2284fc0e93",
+    "email": "marioplayz1975@gmail.com",
+    "role": "admin",
+    "full_name": "Sarv Mario Playz",
+    "supabase_uid": "4e8af408-d2ed-4cdd-a61b-639e58b191c2"
+  },
+  {
+    "id": "a5e88e9b-2421-428e-9e9c-b4b59cf3a8c6",
+    "email": "sarveshvarnr@gmail.com",
+    "role": "patient",
+    "full_name": "SarVeshvarn R",
+    "supabase_uid": "aa092c53-701c-4d96-aaba-3971690218b8"
+  }
+]

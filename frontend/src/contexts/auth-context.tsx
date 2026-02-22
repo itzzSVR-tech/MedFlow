@@ -25,7 +25,8 @@ interface AuthContextType {
     profile: UserProfile | null;
     loading: boolean;
     signIn: (email: string, password: string) => Promise<any>;
-    signInWithGoogle: () => Promise<void>;
+    signUp: (email: string, password: string, metadata: any) => Promise<any>;
+    signInWithGoogle: (role?: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -99,11 +100,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return data;
     };
 
-    const signInWithGoogle = async () => {
+    const signUp = async (email: string, password: string, metadata: any) => {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: metadata,
+            },
+        });
+        if (error) throw error;
+        return data;
+    };
+
+    const signInWithGoogle = async (role?: string) => {
+        if (role) {
+            localStorage.setItem("medflow_intended_role", role);
+        }
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: {
                 redirectTo: `${window.location.origin}/login`,
+                queryParams: {
+                    prompt: "select_account",
+                },
             },
         });
         if (error) throw error;
@@ -121,6 +140,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 profile,
                 loading,
                 signIn,
+                signUp,
                 signInWithGoogle,
                 signOut,
             }}
