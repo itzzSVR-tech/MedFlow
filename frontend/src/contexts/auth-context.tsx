@@ -8,7 +8,7 @@ import api from "@/lib/api";
 interface UserProfile {
     id: string;
     email: string;
-    role: "admin" | "doctor";
+    role: "admin" | "doctor" | "patient";
     hospital_id: string;
     full_name: string;
     created_at?: string;
@@ -50,16 +50,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
             setSession(session);
             setUser(session?.user ?? null);
 
             if (session?.user) {
                 // Check for role hint from Google OAuth login
-                const intendedRole = typeof window !== "undefined" ? localStorage.getItem("medflow_intended_role") : null;
-                if (intendedRole && (!session.user.user_metadata?.role)) {
+                const intendedRole =
+                    typeof window !== "undefined"
+                        ? localStorage.getItem("medflow_intended_role")
+                        : null;
+                if (intendedRole && !session.user.user_metadata?.role) {
                     await supabase.auth.updateUser({
-                        data: { role: intendedRole }
+                        data: { role: intendedRole },
                     });
                     localStorage.removeItem("medflow_intended_role");
                 }
@@ -96,10 +101,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const signInWithGoogle = async () => {
         const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
+            provider: "google",
             options: {
-                redirectTo: `${window.location.origin}/login`
-            }
+                redirectTo: `${window.location.origin}/login`,
+            },
         });
         if (error) throw error;
     };
@@ -109,15 +114,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{
-            user,
-            session,
-            profile,
-            loading,
-            signIn,
-            signInWithGoogle,
-            signOut
-        }}>
+        <AuthContext.Provider
+            value={{
+                user,
+                session,
+                profile,
+                loading,
+                signIn,
+                signInWithGoogle,
+                signOut,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

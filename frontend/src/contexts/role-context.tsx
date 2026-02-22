@@ -1,16 +1,23 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useState,
+    useCallback,
+} from "react";
 import { useAuth } from "./auth-context";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
-export type Role = "admin" | "doctor";
+export type Role = "admin" | "doctor" | "patient";
 export type AvailabilityStatus = "AVAILABLE" | "BUSY" | "OFF DUTY";
 
 // Backend uses lowercase values — map here
 const toBackendStatus = (s: AvailabilityStatus) => s.toLowerCase() as string;
-const fromBackendStatus = (s: string): AvailabilityStatus => s.toUpperCase() as AvailabilityStatus;
+const fromBackendStatus = (s: string): AvailabilityStatus =>
+    s.toUpperCase() as AvailabilityStatus;
 
 interface RoleContextType {
     role: Role;
@@ -24,7 +31,8 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     const { profile, user } = useAuth();
     const [role, setRole] = useState<Role>("admin");
-    const [availability, setAvailability] = useState<AvailabilityStatus>("AVAILABLE");
+    const [availability, setAvailability] =
+        useState<AvailabilityStatus>("AVAILABLE");
 
     // Sync role with profile on load
     useEffect(() => {
@@ -49,7 +57,9 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
                 const { data } = await api.get("/doctor/profile");
                 const doctorProfile = data?.doctors?.[0] || data?.doctorProfile;
                 if (doctorProfile?.availability_status) {
-                    setAvailability(fromBackendStatus(doctorProfile.availability_status));
+                    setAvailability(
+                        fromBackendStatus(doctorProfile.availability_status),
+                    );
                 }
             } catch {
                 // Non-fatal: falls back to default AVAILABLE
@@ -63,28 +73,37 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
         localStorage.setItem("medflow_role", newRole);
     };
 
-    const handleSetAvailability = useCallback(async (status: AvailabilityStatus) => {
-        const prev = availability;
-        setAvailability(status); // Optimistic update
-        if (role === "doctor" && user) {
-            try {
-                await api.patch("/doctor/availability", { status: toBackendStatus(status) });
-                toast.success(`Status updated to ${status.toLowerCase()}`);
-            } catch (err) {
-                setAvailability(prev); // Rollback on error
-                toast.error("Failed to update availability. Please try again.");
-                console.error("Failed to sync availability:", err);
+    const handleSetAvailability = useCallback(
+        async (status: AvailabilityStatus) => {
+            const prev = availability;
+            setAvailability(status); // Optimistic update
+            if (role === "doctor" && user) {
+                try {
+                    await api.patch("/doctor/availability", {
+                        status: toBackendStatus(status),
+                    });
+                    toast.success(`Status updated to ${status.toLowerCase()}`);
+                } catch (err) {
+                    setAvailability(prev); // Rollback on error
+                    toast.error(
+                        "Failed to update availability. Please try again.",
+                    );
+                    console.error("Failed to sync availability:", err);
+                }
             }
-        }
-    }, [availability, role, user]);
+        },
+        [availability, role, user],
+    );
 
     return (
-        <RoleContext.Provider value={{
-            role,
-            setRole: handleSetRole,
-            availability,
-            setAvailability: handleSetAvailability
-        }}>
+        <RoleContext.Provider
+            value={{
+                role,
+                setRole: handleSetRole,
+                availability,
+                setAvailability: handleSetAvailability,
+            }}
+        >
             {children}
         </RoleContext.Provider>
     );

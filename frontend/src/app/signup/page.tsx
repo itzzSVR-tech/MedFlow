@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import Link from "next/link";
 import {
@@ -10,7 +10,7 @@ import {
     Building2,
     Chrome,
     Shield,
-    Users
+    Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -41,7 +41,9 @@ export default function Signup() {
         e.preventDefault();
 
         if (activeTab === "staff") {
-            setError("Staff signup is currently restricted. Please ask your Hospital Administrator for an invite link.");
+            setError(
+                "Staff signup is currently restricted. Please ask your Hospital Administrator for an invite link.",
+            );
             return;
         }
 
@@ -55,15 +57,17 @@ export default function Signup() {
                     data: {
                         full_name: `${formData.firstName} ${formData.lastName}`,
                         hospital_name: formData.hospitalName,
-                        role: "admin"
-                    }
-                }
+                        role: activeTab === "admin" ? "admin" : "patient",
+                    },
+                },
             });
 
             if (signupError) throw signupError;
 
             if (data.user) {
-                router.push("/login?message=Check your email to confirm your account");
+                router.push(
+                    "/login?message=Check your email to confirm your account",
+                );
             }
         } catch (err: any) {
             setError(err.message || "Failed to sign up.");
@@ -92,12 +96,18 @@ export default function Signup() {
                             <Activity className="text-white w-6 h-6" />
                         </div>
                         <h3 className="text-2xl font-bold mb-4">
-                            {activeTab === "admin" ? "Register Hospital" : "Medical Staff Portal"}
+                            {activeTab === "admin"
+                                ? "Register Hospital"
+                                : activeTab === "staff"
+                                  ? "Medical Staff Portal"
+                                  : "Join as Patient"}
                         </h3>
                         <p className="text-blue-100 leading-relaxed text-sm">
                             {activeTab === "admin"
                                 ? "Empower your facility with MedFlow's unified OS. Start your administrator journey now."
-                                : "Join your hospital network and collaborate with your medical team in real-time."}
+                                : activeTab === "staff"
+                                  ? "Join your hospital network and collaborate with your medical team in real-time."
+                                  : "Take control of your health. Book appointments and track your care with ease."}
                         </p>
                     </div>
 
@@ -112,11 +122,20 @@ export default function Signup() {
                         <h2 className="text-2xl font-bold text-slate-900">
                             Create Account
                         </h2>
-                        <Link href="/" className="text-slate-400 hover:text-slate-600 transition-colors">✕</Link>
+                        <Link
+                            href="/"
+                            className="text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                            ✕
+                        </Link>
                     </div>
 
-                    <Tabs defaultValue="admin" className="w-full mb-8" onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-2 p-1 bg-slate-100 rounded-2xl h-12">
+                    <Tabs
+                        defaultValue="admin"
+                        className="w-full mb-8"
+                        onValueChange={setActiveTab}
+                    >
+                        <TabsList className="grid w-full grid-cols-3 p-1 bg-slate-100 rounded-2xl h-12">
                             <TabsTrigger
                                 value="admin"
                                 className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm transition-all font-bold flex items-center gap-2 text-xs"
@@ -129,7 +148,14 @@ export default function Signup() {
                                 className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm transition-all font-bold flex items-center gap-2 text-xs"
                             >
                                 <Users className="w-3.5 h-3.5" />
-                                Staff
+                                Doctor
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="patient"
+                                className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm transition-all font-bold flex items-center gap-2 text-xs"
+                            >
+                                <User className="w-3.5 h-3.5" />
+                                Patient
                             </TabsTrigger>
                         </TabsList>
                     </Tabs>
@@ -140,11 +166,13 @@ export default function Signup() {
                         </div>
                     )}
 
-                    {activeTab === "admin" ? (
+                    {activeTab === "admin" || activeTab === "patient" ? (
                         <form className="space-y-4" onSubmit={handleSubmit}>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">First Name</label>
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                        First Name
+                                    </label>
                                     <div className="relative group">
                                         <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                                         <input
@@ -160,7 +188,9 @@ export default function Signup() {
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Last Name</label>
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                        Last Name
+                                    </label>
                                     <div className="relative group">
                                         <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                                         <input
@@ -177,25 +207,31 @@ export default function Signup() {
                                 </div>
                             </div>
 
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Hospital Name</label>
-                                <div className="relative group">
-                                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                                    <input
-                                        type="text"
-                                        name="hospitalName"
-                                        value={formData.hospitalName}
-                                        onChange={handleChange}
-                                        className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl py-2.5 pl-10 pr-3 outline-none transition-all text-sm font-medium"
-                                        placeholder="General Hospital"
-                                        required
-                                        disabled={loading}
-                                    />
+                            {activeTab === "admin" && (
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                        Hospital Name
+                                    </label>
+                                    <div className="relative group">
+                                        <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            name="hospitalName"
+                                            value={formData.hospitalName}
+                                            onChange={handleChange}
+                                            className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl py-2.5 pl-10 pr-3 outline-none transition-all text-sm font-medium"
+                                            placeholder="General Hospital"
+                                            required
+                                            disabled={loading}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Email Address</label>
+                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                    Email Address
+                                </label>
                                 <div className="relative group">
                                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                                     <input
@@ -212,7 +248,9 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Password</label>
+                                <label className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">
+                                    Password
+                                </label>
                                 <div className="relative group">
                                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                                     <input
@@ -234,7 +272,9 @@ export default function Signup() {
                                     disabled={loading}
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
-                                    {loading ? "Initializing..." : "Register Hospital Admin"}
+                                    {loading
+                                        ? "Initializing..."
+                                        : `Register ${activeTab === "admin" ? "Hospital Admin" : "Patient"}`}
                                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                                 </button>
                             </div>
@@ -245,9 +285,13 @@ export default function Signup() {
                                 <Mail className="w-10 h-10" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-900 mb-2">Staff Invitation Required</h3>
+                                <h3 className="text-xl font-bold text-slate-900 mb-2">
+                                    Staff Invitation Required
+                                </h3>
                                 <p className="text-slate-500 text-sm leading-relaxed">
-                                    Medical staff cannot register independently. Please contact your Hospital Administrator to receive an official invite link.
+                                    Medical staff cannot register independently.
+                                    Please contact your Hospital Administrator
+                                    to receive an official invite link.
                                 </p>
                             </div>
                             <Button
@@ -272,7 +316,12 @@ export default function Signup() {
 
                     <p className="text-center text-slate-500 text-sm mt-8 font-medium">
                         Already have an account?{" "}
-                        <Link href="/login" className="text-blue-600 font-bold hover:underline">Log in</Link>
+                        <Link
+                            href="/login"
+                            className="text-blue-600 font-bold hover:underline"
+                        >
+                            Log in
+                        </Link>
                     </p>
                 </div>
             </div>
