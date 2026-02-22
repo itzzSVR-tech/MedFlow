@@ -25,13 +25,22 @@ export function AnimatedNumber({
     }, [motionValue, value, isInView]);
 
     useEffect(() => {
-        springValue.on("change", (latest) => {
+        // Set initial value immediately
+        if (ref.current) {
+            ref.current.textContent = Intl.NumberFormat("en-US").format(
+                Math.floor(springValue.get())
+            );
+        }
+
+        const unsubscribe = springValue.on("change", (latest) => {
             if (ref.current) {
                 ref.current.textContent = Intl.NumberFormat("en-US").format(
                     Math.floor(latest)
                 );
             }
         });
+
+        return () => unsubscribe();
     }, [springValue]);
 
     return <span className={className} ref={ref} />;
