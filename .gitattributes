@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.{js,ts,tsx,json,css,sql} text
+*.md text
+.env* text

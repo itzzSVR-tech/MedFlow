@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "description": "Hospital Management System Backend MVP",
   "main": "dist/server.js",
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=20.18.0"
+  },
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "powershell -Command \"try { Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } } catch {}; exit 0\" && nodemon src/server.ts",
-    "build": "tsc"
+    "dev": "nodemon src/server.ts",
+    "build": "tsc",
+    "clean": "rimraf dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.1",
@@ -18,7 +23,9 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.11.19",
+    "cross-env": "^7.0.3",
     "nodemon": "^3.1.0",
+    "rimraf": "^5.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
